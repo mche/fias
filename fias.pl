@@ -54,7 +54,7 @@ $ua->agent('ELK');
 my %opt = (
   url => 'http://fias.nalog.ru/WebServices/Public/DownloadService.asmx',#http://fias.nalog.ru/WebServices/Public/DownloadService.asmx
   schema => 'fias',
-  table => 'AddressObjects',
+  table => 'AddressObjects2',
   config_table => 'config',
   dbname => 'test',
   dbhost => '127.0.0.1',
@@ -72,7 +72,7 @@ GetOptions(
 
 say Dumper(\%opt) if $opt{debug};
 
-my $dbh = Mojo::Pg::Che->connect("DBI:Pg:dbname=$opt{dbname};host=$opt{dbhost}", $opt{dblogin}, $opt{dbpasswd})->max_connections(1)
+my $dbh = Mojo::Pg::Che->connect("DBI:Pg:dbname=$opt{dbname};host=$opt{dbhost}", $opt{dblogin}, $opt{dbpasswd})->max_connections(50)
   or die;
 my $model = Model::Base->singleton(dbh=>$dbh, template_vars=>{}, mt=>{tag_start=>'{%', tag_end=>'%}'})->sth_cached(1);
 my $config = $dbh->selectall_hashref(<<END_SQL, 'key', undef, ('^update_'));
@@ -229,15 +229,18 @@ END_SQL
 }
 
 my $count = 0;
+my $cb = sub {
+  say sprintf("Обработана строка [%s]", $count++)
+    if $opt{debug};
+};
 sub insert_or_replace {
   my $r = shift;
   
-  $model->_insert($opt{schema}, $opt{table}, ['AOGUID'], $r);
-  #~ $model->_try_insert($opt{schema}, $opt{table}, ['AOGUID'], $r)
-    #~ || $model->_update_distinct($opt{schema}, $opt{table}, ['AOGUID'], $r);
+  $model->_insert($opt{schema}, $opt{table}, ['AOID'], $r, $cb);
+  #~ $model->_try_insert($opt{schema}, $opt{table}, ['AOID'], $r)
+    #~ || $model->_update_distinct($opt{schema}, $opt{table}, ['AOID'], $r);
   
-  say sprintf("Обработана строка [%s]", $count++)
-    if $opt{debug};
+  
 }
 
 

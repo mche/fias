@@ -1,3 +1,5 @@
+ALTER TABLE fias."AddressObjects" ADD CONSTRAINT AddressObjects_pkey PRIMARY KEY(aoguid);
+
 -- foreign key (parentguid to aoguid)
 -- ALTER TABLE addrobj DROP CONSTRAINT addrobj_parentguid_fkey;
 ALTER TABLE fias."AddressObjects" 
