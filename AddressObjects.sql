@@ -1,4 +1,6 @@
-create table fias."AddressObjects" (
+create schema if not exists fias; 
+
+create table if not exists fias."AddressObjects" (
   "AOGUID" uuid not null unique,--Глобальный уникальный идентификатор адресного объекта
   "FORMALNAME" text not null, --Формализованное наименование
   "REGIONCODE" char(2) not null, --Код региона
@@ -37,4 +39,4 @@ create table fias."AddressObjects" (
   "LIVESTATUS" boolean not null, --Признак действующего адресного объекта
   "CADNUM" varchar(120), -- Кадастровый номер
   "DIVTYPE" smallint not null, --Тип адресации: 0 - не определено 1 - муниципальный; 2 - административно-территориальный
-  
+  );
