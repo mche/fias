@@ -181,17 +181,17 @@ $model->вставить_или_обновить($opt{schema}, $opt{config_table
 
 system('rm -f AS_*.XML; rm -f fias_xml.rar');
 
-#~ my %index = (
-  #~ AOLEVEL=>'AOLEVEL',
-  #~ AOGUID =>'AOGUID',
-  #~ PARENTGUID => 'PARENTGUID',
-  #~ ACTSTATUS => 'ACTSTATUS',
-  #~ REGIONCODE => 'REGIONCODE',
-  #~ REGLEVFN => [qw(FORMALNAME AOLEVEL REGIONCODE)],
-  #~ LIVESTATUS => 'LIVESTATUS',
-  #~ code =>'CODE',
-  #~ FTFORMALNAME => 'FORMALNAME',# FULLTEXT
-#~ );
+my %index = (
+  AOLEVEL=>'AOLEVEL',
+  AOGUID =>'AOGUID',
+  PARENTGUID => 'PARENTGUID',
+  ACTSTATUS => 'ACTSTATUS',
+  REGIONCODE => 'REGIONCODE',
+  REGLEVFN => [qw(FORMALNAME AOLEVEL REGIONCODE)],
+  LIVESTATUS => 'LIVESTATUS',
+  code =>'CODE',
+  FTFORMALNAME => 'FORMALNAME',# FULLTEXT
+);
 ###################################### SUB ##########################################################################
 sub process {
   my $xmlfile = shift || glob 'AS_ADDROBJ*.XML';
