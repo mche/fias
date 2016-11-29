@@ -74,7 +74,7 @@ say Dumper(\%opt) if $opt{debug};
 
 my $dbh = Mojo::Pg::Che->connect("DBI:Pg:dbname=$opt{dbname};host=$opt{dbhost}", $opt{dblogin}, $opt{dbpasswd})->max_connections(1)
   or die;
-my $model = Model::Base->singleton(dbh=>$dbh, template_vars=>{}, mt=>{tag_start=>'{%', tag_end=>'%}'});
+my $model = Model::Base->singleton(dbh=>$dbh, template_vars=>{}, mt=>{tag_start=>'{%', tag_end=>'%}'})->sth_cached(1);
 my $config = $dbh->selectall_hashref(<<END_SQL, 'key', undef, ('^update_'));
 select * from $op{schema}.$opt{config_table}
 where key ~ ?;
@@ -111,9 +111,8 @@ my $twig= XML::Twig->new(
         warn "\nОшибка парсинга!! Длина ИДа != 36  ", Dumper($r) , $elt->print;
       }
       elsif (!$opt{nosave}) {
-        #~ insert_or_replace($r);
-        #~ $elt->print;
-        say Dumper($r);
+        insert_or_replace($r);
+        #~ say Dumper($r);
       }
       $t->purge;
       #~ print ".";
@@ -235,37 +234,17 @@ END_SQL
   1;
 }
 
+my $count = 0;
 sub insert_or_replace {
   my $r = shift;
   
-  $model->_try_insert($opt{schema}, $opt{table}, ['']) || $model->_update_distinct(@_);
+  $model->_try_insert($opt{schema}, $opt{table}, ['AOGUID'], $r)
+    || $model->_update_distinct($opt{schema}, $opt{table}, ['AOGUID'], $r);
+  
+  say sprintf("Обработана строка [%s]", $count++)
+    if $opt{debug};
 }
 
-my $sth;
-my $count = 0;
-sub insert_or_replace00 {
-  my $r = shift;
-  my @cols = sort keys %$r;
-  #~ return if $sth;
-  my $c = scalar @cols;
-  #~ say "COLS $c\n";
-  my $sql  = <<END_SQL;
-insert into $opt{dbname}.`$opt{table}` (`@{[join("`,`", @cols)]}`) values (@{[join(',', map('?', @cols))]})
-ON DUPLICATE KEY UPDATE
-#AOID=AOID
-@{[join(', ', map {"`$_`=?"} @cols)]}
-;
-END_SQL
-  if ($opt{sqldump}) {
-    $sql =~ s/\?/'%s'/g;
-    say sprintf($sql, map {$r->{$_}} (@cols,@cols)), "\n\n";#@cols,@cols
-    return 1;
-  }
-  $sth->{$sql} ||= $dbh->prepare($sql);
-  my $rc = $sth->{$sql}->execute(map {$r->{$_}} (@cols,@cols));#@cols,@cols
-  $count++;
-  say "Обработана строка [#$count] в таблицу [$opt{table}]", $rc, "\n" if $opt{debug};
-}
 
 #~ $ mojo get -M POST -H 'Content-Type: application/soap+xml; charset=utf-8' -c '<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><GetLastDownloadFileInfo xmlns="http://fias.nalog.ru/WebServices/Public/DownloadService.asmx" /></soap12:Body></soap12:Envelope>' fias.nalog.ru/WebServices/Public/DownloadService.asmx
 
@@ -274,9 +253,12 @@ END_SQL
 __END__
 
     Добавляем расширение для работы с триграммами
-    CREATE EXTENSION pg_trgm;
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
     Создаем индекс на нужном поле
     CREATE INDEX addrobj_formalname_idx ON addrobj USING gist (formalname gist_trgm_ops);
+    -- trigram indexes to speed up text searches
+    CREATE INDEX formalname_trgm_idx on addrobj USING gin (formalname gin_trgm_ops);
+    CREATE INDEX offname_trgm_idx on addrobj USING gin (offname gin_trgm_ops);
     Теперь ищем
     select * from addrobj where formalname ~ 'ростов';
 
