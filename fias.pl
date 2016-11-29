@@ -232,8 +232,9 @@ my $count = 0;
 sub insert_or_replace {
   my $r = shift;
   
-  $model->_try_insert($opt{schema}, $opt{table}, ['AOGUID'], $r)
-    || $model->_update_distinct($opt{schema}, $opt{table}, ['AOGUID'], $r);
+  $model->_insert($opt{schema}, $opt{table}, ['AOGUID'], $r);
+  #~ $model->_try_insert($opt{schema}, $opt{table}, ['AOGUID'], $r)
+    #~ || $model->_update_distinct($opt{schema}, $opt{table}, ['AOGUID'], $r);
   
   say sprintf("Обработана строка [%s]", $count++)
     if $opt{debug};
