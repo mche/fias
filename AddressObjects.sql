@@ -6,7 +6,7 @@ create table if not exists fias.config (
 );
 
 create table if not exists fias."AddressObjects" (
-  "AOGUID" uuid not null unique,--Глобальный уникальный идентификатор адресного объекта
+  "AOGUID" uuid not null primary key,--Глобальный уникальный идентификатор адресного объекта
   "FORMALNAME" text not null, --Формализованное наименование
   "REGIONCODE" char(2) not null, --Код региона
   "AUTOCODE" char(1) not null, --Код автономии
@@ -45,3 +45,11 @@ create table if not exists fias."AddressObjects" (
   "CADNUM" varchar(120), -- Кадастровый номер
   "DIVTYPE" smallint not null, --Тип адресации: 0 - не определено 1 - муниципальный; 2 - административно-территориальный
 );
+
+-- foreign key (parentguid to aoguid)
+-- ALTER TABLE addrobj DROP CONSTRAINT addrobj_parentguid_fkey;
+ALTER TABLE fias."AddressObjects" 
+  ADD CONSTRAINT AddressObjects_parentguid_fkey FOREIGN KEY ("PARENTGUID")
+  REFERENCES fias."AddressObjects" ("AOGUID") MATCH SIMPLE
+ON UPDATE CASCADE ON DELETE NO ACTION;
+

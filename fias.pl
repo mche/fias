@@ -53,8 +53,9 @@ $ua->agent('ELK');
 
 my %opt = (
   url => 'http://fias.nalog.ru/WebServices/Public/DownloadService.asmx',#http://fias.nalog.ru/WebServices/Public/DownloadService.asmx
-  table => '"fias"."AddressObjects"',
-  config => 'fias.config',
+  schema= > 'fias',
+  table => 'AddressObjects',
+  config => 'config',
   dbname => 'test',
   dbhost => '127.0.0.1',
   dblogin => 'postgres',
@@ -75,7 +76,7 @@ my $dbh = Mojo::Pg::Che->connect("DBI:Pg:dbname=$opt{dbname};host=$opt{dbhost}",
   or die;
 my $model = Model::Base->singleton(dbh=>$dbh, template_vars=>{}, mt=>{tag_start=>'{%', tag_end=>'%}'});
 my $config = $dbh->selectall_hashref(<<END_SQL, 'key', undef, ('^update_'));
-select * from $opt{config}
+select * from $op{schema}.$opt{config_table}
 where key ~ ?;
 END_SQL
 
@@ -111,7 +112,8 @@ my $twig= XML::Twig->new(
       }
       elsif (!$opt{nosave}) {
         #~ insert_or_replace($r);
-        $elt->print;
+        #~ $elt->print;
+        say Dumper($r);
       }
       $t->purge;
       #~ print ".";
@@ -177,7 +179,7 @@ process($xmlfile);
 
 map {# сохранить версию
   $dbh->do(<<END_SQL, undef, ($_, $config->{$_}, $_, $config->{$_},));
-insert into $opt{config} (key, value) values (?,?)
+insert into $opt{schema}.$opt{config_table} (key, value) values (?,?)
 ON DUPLICATE KEY UPDATE
 `key` = ?, `value` = ?;
 END_SQL
@@ -204,7 +206,7 @@ sub process {
   if ($opt{complete000}) {
     say "Чикаются все записи $opt{table} и индексы";
     $dbh->do(<<END_SQL,);
-delete from $opt{table};
+delete from "$opt{schema}"."$opt{table}";
 END_SQL
     #~ map {say "Удаляется индекс $_ ..."; $dbh->do(<<END_SQL,); say "OK\n";} keys %index;
 #~ alter table `$opt{table}` drop index `$_`;
@@ -226,16 +228,22 @@ END_SQL
 #~ ALTER TABLE `$opt{table}` ADD FULLTEXT `FTFORMALNAME` (`FORMALNAME`);
 #~ END_SQL
   }
-  $dbh->commit;
+  #~ $dbh->commit;
   say "===== ====== ====== ГОТОВО ====== ======= ======= \n";
 
 #~ 
   1;
 }
 
+sub insert_or_replace {
+  my $r = shift;
+  
+  $model->_try_insert($opt{schema}, $opt{table}, ['']) || $model->_update_distinct(@_);
+}
+
 my $sth;
 my $count = 0;
-sub insert_or_replace {
+sub insert_or_replace00 {
   my $r = shift;
   my @cols = sort keys %$r;
   #~ return if $sth;
