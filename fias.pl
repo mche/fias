@@ -69,7 +69,7 @@ GetOptions(
   (map {$_.'=s' => \$opt{$_};} keys %opt),
 );
 
-print Dumper(\%opt) if $opt{debug};
+say Dumper(\%opt) if $opt{debug};
 
 my $dbh = Mojo::Pg::Che->connect("DBI:Pg:dbname=$opt{dbname};host=$opt{dbhost}", $opt{dblogin}, $opt{dbpasswd})->max_connections(1)
   or die;
@@ -89,7 +89,7 @@ my $twig= XML::Twig->new(
           if $config->{update_versionid}{value} eq $elt->text;
         $config->{update_versionid} = $elt->text;
         $t->purge;
-      },#print $versionid, "\n";
+      },#say $versionid;
     'FiasDeltaXmlUrl'=>sub {
         my( $t, $elt)= @_;
         $fiasdeltaxmlurl = $elt->text;
@@ -100,10 +100,10 @@ my $twig= XML::Twig->new(
         $fiascompletexmlurl = $elt->text;
         $t->purge;
       },
-    #~ FiasCompleteXmlUrl=>sub{my( $t, $elt)= @_; print Dumper($elt), "\n"; $t->purge;},
+    #~ FiasCompleteXmlUrl=>sub{my( $t, $elt)= @_; say Dumper($elt), "\n"; $t->purge;},
     'AddressObjects/Object'=>sub {# основной парсинг
       my( $t, $elt)= @_;
-      if ( $opt{debug} > 1) {$elt->print; print "\n";}
+      if ( $opt{debug} > 1) {$elt->print; say "\n";}
       
       my $r = $elt->atts;# Return a hash ref containing the element attributes
       if ( grep(defined $r->{$_} && length($r->{$_}) != 36, qw(AOID AOGUID PARENTGUID)) ) {
@@ -111,7 +111,7 @@ my $twig= XML::Twig->new(
       }
       elsif (!$opt{nosave}) {
         #~ insert_or_replace($r);
-        
+        $elt->print;
       }
       $t->purge;
       #~ print ".";
@@ -147,7 +147,8 @@ my $post = $ua->post($opt{url}, Content_Type=> 'application/soap+xml; charset=ut
 END_CONTENT
 #
 );
-print Dumper($post->request),"\n", $post->decoded_content, "\n\n" if $opt{debug};
+say Dumper($post->request),"\n", $post->decoded_content, "\n\n"
+  if $opt{debug};
 
 $twig->parse($post->decoded_content);
 #~ exit;
@@ -155,8 +156,9 @@ $twig->parse($post->decoded_content);
 my $url = $opt{complete} ? $fiascompletexmlurl : $fiasdeltaxmlurl;
 die "Не смог url обновления (SOAP запрос)" unless $url;
 
-#~ print Dumper($config); exit;
-print "Загружается Fias@{[$opt{complete} ? 'Complete' : 'Delta']}XmlUrl = [$url] =>>> 'fias_xml.rar'...\n"  if $opt{debug};
+#~ say Dumper($config); exit;
+say "Загружается Fias@{[$opt{complete} ? 'Complete' : 'Delta']}XmlUrl = [$url] =>>> 'fias_xml.rar'...\n"
+  if $opt{debug};
 
 my $get = $ua->get_with_progress($url, ':content_file'=>'fias_xml.rar',);
 $get->is_success or die "Не смог [$url]";
@@ -200,31 +202,32 @@ sub process {
   my $xmlfile = shift || glob 'AS_ADDROBJ*.XML';
   #~ $dbh->begin_work;
   if ($opt{complete000}) {
-    print "Чикаются все записи $opt{table} и индексы";
+    say "Чикаются все записи $opt{table} и индексы";
     $dbh->do(<<END_SQL,);
 delete from $opt{table};
 END_SQL
-    #~ map {print "Удаляется индекс $_ ..."; $dbh->do(<<END_SQL,); print "OK\n";} keys %index;
+    #~ map {say "Удаляется индекс $_ ..."; $dbh->do(<<END_SQL,); say "OK\n";} keys %index;
 #~ alter table `$opt{table}` drop index `$_`;
 #~ END_SQL
   }
-  print "Обрабатывается файл [$xmlfile]\n"  if $opt{debug};
+  say "Обрабатывается файл [$xmlfile]\n"
+    if $opt{debug};
   $twig->parsefile($xmlfile);#"AS_ADDROBJ_20130110_0deec9c3-21a8-4510-99f6-c85206f140cd.XML"
   if ($opt{complete000}) {
     map {
-      print "Долго [~2-3 минуты] создается индекс $_ ...";
+      say "Долго [~2-3 минуты] создается индекс $_ ...";
       $dbh->do(<<END_SQL,);
 alter table $opt{table} add @{[/^FT/ && 'FULLTEXT']} index `$_` (`@{[ref($index{$_}) ? join('`, `', @{$index{$_}}) : $index{$_}]}`);
 END_SQL
-      print "OK\n";
+      say "OK\n";
     } keys %index;
-    #~ print "Долго создается индекс FULLTEXT `FTFORMALNAME ...";
+    #~ say "Долго создается индекс FULLTEXT `FTFORMALNAME ...";
     #~ $dbh->do(<<END_SQL,);
 #~ ALTER TABLE `$opt{table}` ADD FULLTEXT `FTFORMALNAME` (`FORMALNAME`);
 #~ END_SQL
   }
   $dbh->commit;
-  print "===== ====== ====== ГОТОВО ====== ======= ======= \n";
+  say "===== ====== ====== ГОТОВО ====== ======= ======= \n";
 
 #~ 
   1;
@@ -237,7 +240,7 @@ sub insert_or_replace {
   my @cols = sort keys %$r;
   #~ return if $sth;
   my $c = scalar @cols;
-  #~ print "COLS $c\n";
+  #~ say "COLS $c\n";
   my $sql  = <<END_SQL;
 insert into $opt{dbname}.`$opt{table}` (`@{[join("`,`", @cols)]}`) values (@{[join(',', map('?', @cols))]})
 ON DUPLICATE KEY UPDATE
@@ -247,13 +250,13 @@ ON DUPLICATE KEY UPDATE
 END_SQL
   if ($opt{sqldump}) {
     $sql =~ s/\?/'%s'/g;
-    print sprintf($sql, map {$r->{$_}} (@cols,@cols)), "\n\n";#@cols,@cols
+    say sprintf($sql, map {$r->{$_}} (@cols,@cols)), "\n\n";#@cols,@cols
     return 1;
   }
   $sth->{$sql} ||= $dbh->prepare($sql);
   my $rc = $sth->{$sql}->execute(map {$r->{$_}} (@cols,@cols));#@cols,@cols
   $count++;
-  print "Обработана строка [#$count] в таблицу [$opt{table}]", $rc, "\n" if $opt{debug};
+  say "Обработана строка [#$count] в таблицу [$opt{table}]", $rc, "\n" if $opt{debug};
 }
 
 #~ $ mojo get -M POST -H 'Content-Type: application/soap+xml; charset=utf-8' -c '<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><GetLastDownloadFileInfo xmlns="http://fias.nalog.ru/WebServices/Public/DownloadService.asmx" /></soap12:Body></soap12:Envelope>' fias.nalog.ru/WebServices/Public/DownloadService.asmx
