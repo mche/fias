@@ -43,7 +43,7 @@ create table if not exists fias."AddressObjects" (
   "NORMDOC" uuid, --Внешний ключ на нормативный документ
   "LIVESTATUS" boolean not null, --Признак действующего адресного объекта
   "CADNUM" varchar(120), -- Кадастровый номер
-  "DIVTYPE" smallint not null --Тип адресации: 0 - не определено 1 - муниципальный; 2 - административно-территориальный
+  "DIVTYPE" smallint --not null Тип адресации: 0 - не определено 1 - муниципальный; 2 - административно-территориальный
 );
 
 
