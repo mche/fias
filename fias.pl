@@ -53,7 +53,7 @@ $ua->agent('ELK');
 
 my %opt = (
   url => 'http://fias.nalog.ru/WebServices/Public/DownloadService.asmx',#http://fias.nalog.ru/WebServices/Public/DownloadService.asmx
-  schema= > 'fias',
+  schema => 'fias',
   table => 'AddressObjects',
   config => 'config',
   dbname => 'test',
@@ -76,7 +76,7 @@ my $dbh = Mojo::Pg::Che->connect("DBI:Pg:dbname=$opt{dbname};host=$opt{dbhost}",
   or die;
 my $model = Model::Base->singleton(dbh=>$dbh, template_vars=>{}, mt=>{tag_start=>'{%', tag_end=>'%}'})->sth_cached(1);
 my $config = $dbh->selectall_hashref(<<END_SQL, 'key', undef, ('^update_'));
-select * from $op{schema}.$opt{config_table}
+select * from "$opt{schema}"."$opt{config_table}"
 where key ~ ?;
 END_SQL
 
@@ -176,28 +176,22 @@ system("rm -f AS_*.XML; unrar e -n'$xmlfile' fias_xml.rar") == 0
 
 process($xmlfile);
 
-map {# сохранить версию
-  $dbh->do(<<END_SQL, undef, ($_, $config->{$_}, $_, $config->{$_},));
-insert into $opt{schema}.$opt{config_table} (key, value) values (?,?)
-ON DUPLICATE KEY UPDATE
-`key` = ?, `value` = ?;
-END_SQL
-  
-} keys %$config;
+$model->вставить_или_обновить($opt{schema}, $opt{config_table}, ['key'], {key=>$_, value=>$config->{$_}})
+  for keys %$config;# сохранить версию
 
 system('rm -f AS_*.XML; rm -f fias_xml.rar');
 
-my %index = (
-  AOLEVEL=>'AOLEVEL',
-  AOGUID =>'AOGUID',
-  PARENTGUID => 'PARENTGUID',
-  ACTSTATUS => 'ACTSTATUS',
-  REGIONCODE => 'REGIONCODE',
-  REGLEVFN => [qw(FORMALNAME AOLEVEL REGIONCODE)],
-  LIVESTATUS => 'LIVESTATUS',
-  code =>'CODE',
-  FTFORMALNAME => 'FORMALNAME',# FULLTEXT
-);
+#~ my %index = (
+  #~ AOLEVEL=>'AOLEVEL',
+  #~ AOGUID =>'AOGUID',
+  #~ PARENTGUID => 'PARENTGUID',
+  #~ ACTSTATUS => 'ACTSTATUS',
+  #~ REGIONCODE => 'REGIONCODE',
+  #~ REGLEVFN => [qw(FORMALNAME AOLEVEL REGIONCODE)],
+  #~ LIVESTATUS => 'LIVESTATUS',
+  #~ code =>'CODE',
+  #~ FTFORMALNAME => 'FORMALNAME',# FULLTEXT
+#~ );
 ###################################### SUB ##########################################################################
 sub process {
   my $xmlfile = shift || glob 'AS_ADDROBJ*.XML';
