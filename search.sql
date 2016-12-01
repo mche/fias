@@ -1,6 +1,6 @@
-CREATE or REPLACE FUNCTION fias.match_array(text, text[])
+CREATE or REPLACE FUNCTION fias.match_weight(text, text[])
 RETURNS int2 AS $$
---select fias.match_array('фокиэ пермэ'::text, '{фоки1,пер,3}'::text[]);
+--select fias.match_weight('фокиэ пермэ'::text, '{фоки1,пер,3}'::text[]);
 DECLARE
   --s boolean[] := array[]::boolean[];
   s int2 := 0;
@@ -46,7 +46,7 @@ SELECT
   l3."AOID" AS "l3AOID",
   l3."AOGUID" AS "l3AOGUID",
   l3."PARENTGUID" AS "l3PARENTGUID",
-  --fias.match_array(l3."FORMALNAME", $1) as "l3PARENT_MATCH",
+  --fias.match_weight(l3."FORMALNAME", $1) as "l3PARENT_MATCH",
   
   l4.*
 FROM (SELECT
@@ -59,7 +59,7 @@ FROM (SELECT
   l4."AOLEVEL" AS "l4AOLEVEL",
   --l4.CENTSTATUS AS l4CENTSTATUS,
   l4."AOID" AS "l4AOID",
-  --fias.match_array(l4."FORMALNAME", $1) as "l4PARENT_MATCH",
+  --fias.match_weight(l4."FORMALNAME", $1) as "l4PARENT_MATCH",
   -- 
   
   l5.*
@@ -73,7 +73,7 @@ FROM (SELECT
   l5."AOLEVEL" AS "l5AOLEVEL",
   --l5.CENTSTATUS AS l5CENTSTATUS,
   l5."AOID" AS "l5AOID",
-  --fias.match_array(l5."FORMALNAME", $1) as "l5PARENT_MATCH",
+  --fias.match_weight(l5."FORMALNAME", $1) as "l5PARENT_MATCH",
   
   l6.*
 FROM (SELECT
@@ -86,7 +86,7 @@ FROM (SELECT
   l6."AOLEVEL" AS "l6AOLEVEL",
   --l6."CENTSTATUS" AS l6CENTSTATUS,
   l6."AOID" AS "l6AOID",
-  --fias.match_array(l6."FORMALNAME", $1) as "l6PARENT_MATCH",
+  --fias.match_weight(l6."FORMALNAME", $1) as "l6PARENT_MATCH",
   
   l7.*
 FROM (SELECT
@@ -120,23 +120,34 @@ $func$ LANGUAGE SQL;
 
 
 CREATE OR REPLACE FUNCTION fias.search_formalname(text[])
-RETURNS  TABLE("AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[])--, "PAR
+RETURNS  TABLE(weight int2, "AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[])--, "PAR
 AS $func$
 DECLARE
   len int := array_length($1, 1);
   a text := $1[1];
   b text := $1[len];
+  aa text[];
+  bb text[];
+  
 
 BEGIN
 
 IF len > 1 THEN
+  aa := $1[2:len];-- со второго до последнего 
+  bb := $1[1:len-1]; -- с первого до предпоследнего
   RETURN QUERY
-  select * from fias.search_formalname(a);
+  select fias.match_weight(array_to_string(s."FORMALNAME"[1:4], ' '), aa), *
+  from fias.search_formalname(a) s
+  where  fias.match_weight(array_to_string(s."FORMALNAME"[1:4], ' '), aa) > 0
+  
   union
-  select * from fias.search_formalname(b);
+  
+  select fias.match_weight(array_to_string(s."FORMALNAME"[1:4], ' '), bb), *
+  from fias.search_formalname(b) s
+  where  fias.match_weight(array_to_string(s."FORMALNAME"[1:4], ' '), bb) > 0;
 ELSE
   RETURN QUERY
-  select * from fias.search_formalname(a);
+  select null, * from fias.search_formalname(a) s;
 END IF;
 
 END;
