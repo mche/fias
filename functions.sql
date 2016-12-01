@@ -8,7 +8,7 @@ DECLARE
 BEGIN
   --FOR i IN 1..array_upper($2, 1) LOOP
   FOREACH x IN ARRAY $2 LOOP
-    IF lower($1) ~ x THEN
+    IF lower($1) ~ lower(x) THEN
       --RAISE NOTICE '% ~ %', $1, x;
       --RETURN true;
       s := s + 1;
@@ -21,8 +21,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION fias.search_formalname(text)
-RETURNS  TABLE("AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[])--, "PARENT_MATCH" int2[])
---TABLE("AOGUID" uuid, "PARENTGUID" uuid, "AOLEVEL" int2)
+RETURNS  TABLE("AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[], "CENTSTATUS" int2[], id int[])--, "PARENT_MATCH" int2[])
 AS $func$
 --explain
 select
@@ -31,22 +30,20 @@ select
   array["l3PARENTGUID", "l4PARENTGUID", "l5PARENTGUID", "l6PARENTGUID", "l7PARENTGUID"],
   array["l3AOLEVEL", "l4AOLEVEL", "l5AOLEVEL", "l6AOLEVEL", "l7AOLEVEL"],
   Array["l3FORMALNAME", "l4FORMALNAME", "l5FORMALNAME", "l6FORMALNAME", "l7FORMALNAME"],
-  Array["l3SHORTNAME", "l4SHORTNAME", "l5SHORTNAME", "l6SHORTNAME", "l7SHORTNAME"]
-  --array["l3PARENT_MATCH", "l4PARENT_MATCH", "l5PARENT_MATCH", "l6PARENT_MATCH"]
+  Array["l3SHORTNAME", "l4SHORTNAME", "l5SHORTNAME", "l6SHORTNAME", "l7SHORTNAME"],
+  Array["l3CENTSTATUS", "l4CENTSTATUS", "l5CENTSTATUS", "l6CENTSTATUS", "l7CENTSTATUS"],
+  array[l3id, l4id, l5id, l6id, l7id]
   
 from (
 SELECT 
-  --l4.l7AOID AS aoid,
   l3.id as l3id,
   l3."FORMALNAME" AS "l3FORMALNAME",
-  -- l3.OFFNAME as l3OFFNAME,
   l3."SHORTNAME" AS "l3SHORTNAME",
   l3."AOLEVEL" AS "l3AOLEVEL",
-  --l3.CENTSTATUS AS l3CENTSTATUS,
+  l3."CENTSTATUS" AS "l3CENTSTATUS",
   l3."AOID" AS "l3AOID",
   l3."AOGUID" AS "l3AOGUID",
   l3."PARENTGUID" AS "l3PARENTGUID",
-  --fias.match_weight(l3."FORMALNAME", $1) as "l3PARENT_MATCH",
   
   l4.*
 FROM (SELECT
@@ -57,7 +54,7 @@ FROM (SELECT
   l4."AOGUID" AS "l4AOGUID",
   l4."PARENTGUID" AS "l4PARENTGUID",
   l4."AOLEVEL" AS "l4AOLEVEL",
-  --l4.CENTSTATUS AS l4CENTSTATUS,
+  l4."CENTSTATUS" AS "l4CENTSTATUS",
   l4."AOID" AS "l4AOID",
   --fias.match_weight(l4."FORMALNAME", $1) as "l4PARENT_MATCH",
   -- 
@@ -71,7 +68,7 @@ FROM (SELECT
   l5."AOGUID" AS "l5AOGUID",
   l5."PARENTGUID" AS "l5PARENTGUID",
   l5."AOLEVEL" AS "l5AOLEVEL",
-  --l5.CENTSTATUS AS l5CENTSTATUS,
+  l5."CENTSTATUS" AS "l5CENTSTATUS",
   l5."AOID" AS "l5AOID",
   --fias.match_weight(l5."FORMALNAME", $1) as "l5PARENT_MATCH",
   
@@ -84,7 +81,7 @@ FROM (SELECT
   l6."AOGUID" AS "l6AOGUID",
   l6."PARENTGUID" AS "l6PARENTGUID",
   l6."AOLEVEL" AS "l6AOLEVEL",
-  --l6."CENTSTATUS" AS l6CENTSTATUS,
+  l6."CENTSTATUS" AS "l6CENTSTATUS",
   l6."AOID" AS "l6AOID",
   --fias.match_weight(l6."FORMALNAME", $1) as "l6PARENT_MATCH",
   
@@ -96,31 +93,36 @@ FROM (SELECT
   "AOGUID" AS "l7AOGUID",
   "PARENTGUID" AS "l7PARENTGUID",
   "AOLEVEL" AS "l7AOLEVEL",
-  --"CENTSTATUS" AS "l7CENTSTATUS",
+  "CENTSTATUS" AS "l7CENTSTATUS",
   "AOID" AS "l7AOID"
         FROM
           fias."AddressObjects"
         WHERE 
-        lower("FORMALNAME") ~ $1--[1] or (array_length($1, 1) > 1 and lower("FORMALNAME") ~ $1[array_length($1, 1)])
-        and "ACTSTATUS" = 1
+        lower("FORMALNAME") ~ lower($1) --[1] or (array_length($1, 1) > 1 and lower("FORMALNAME") ~ $1[array_length($1, 1)])
+        --and "ACTSTATUS" = 1
 ) l7
 LEFT JOIN fias."AddressObjects" l6 	ON
-          l6."ACTSTATUS" = 1 AND l7."l7PARENTGUID" = l6."AOGUID" --AND l6.id<>l7.l7id -- AND (a.AOGUID<>@ParentGUID)
+          --l6."ACTSTATUS" = 1 AND 
+          l7."l7PARENTGUID" = l6."AOGUID" --AND l6.id<>l7.l7id -- AND (a.AOGUID<>@ParentGUID)
 ) l6
 LEFT JOIN fias."AddressObjects" l5 	ON
-          l5."ACTSTATUS" = 1 AND l6."l6PARENTGUID" = l5."AOGUID" --AND l5.id<>l6.l6id 
+          --l5."ACTSTATUS" = 1 AND
+          l6."l6PARENTGUID" = l5."AOGUID" --AND l5.id<>l6.l6id 
 ) l5
 LEFT JOIN fias."AddressObjects" l4 	ON
-          l4."ACTSTATUS" = 1 AND l5."l5PARENTGUID" = l4."AOGUID" --AND l4.id<>l5.l5id
+          --l4."ACTSTATUS" = 1 AND 
+          l5."l5PARENTGUID" = l4."AOGUID" --AND l4.id<>l5.l5id
 ) l4
 LEFT JOIN fias."AddressObjects" l3 	ON
-          l3."ACTSTATUS" = 1 AND l4."l4PARENTGUID" = l3."AOGUID" --AND l3.id<>l4.l4id --  AND l3.REGIONCODE = regcode 
+          --l3."ACTSTATUS" = 1 AND 
+          l4."l4PARENTGUID" = l3."AOGUID" --AND l3.id<>l4.l4id --  AND l3.REGIONCODE = regcode 
 ) a;
 $func$ LANGUAGE SQL;
 
 
+-- финальная функция
 CREATE OR REPLACE FUNCTION fias.search_formalname(text[])
-RETURNS  TABLE(weight int2, "AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[])--, "PAR
+RETURNS  TABLE(weight int2, "AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[], "CENTSTATUS" int2[], id int[])--, "PAR
 AS $func$
 DECLARE
   len int := array_length($1, 1);
@@ -128,8 +130,6 @@ DECLARE
   b text := $1[len];
   aa text[];
   bb text[];
-  
-
 BEGIN
 
 IF len > 1 THEN
@@ -147,9 +147,12 @@ IF len > 1 THEN
   where  fias.match_weight(array_to_string(s."FORMALNAME"[1:4], ' '), bb) > 0;
 ELSE
   RETURN QUERY
-  select null, * from fias.search_formalname(a) s;
+  select null::int2, *
+  from fias.search_formalname(a) s;
 END IF;
 
 END;
 
 $func$ LANGUAGE plpgsql;
+
+---select * from fias.search_formalname('{моск, корол}'::text[]) order by weight desc, array_to_string("AOLEVEL", '')::int;

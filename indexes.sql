@@ -1,7 +1,7 @@
 ALTER TABLE fias."AddressObjects" ADD CONSTRAINT AddressObjects_pkey PRIMARY KEY("id");
-CREATE UNIQUE INDEX ON fias."AddressObjects" USING btree ("AOID");
-CREATE INDEX ON fias."AddressObjects" USING btree ("AOGUID");
-CREATE UNIQUE INDEX ON fias."AddressObjects" USING btree ("AOGUID", "ACTSTATUS", "CURRSTATUS");--, "LIVESTATUS"
+--CREATE UNIQUE INDEX ON fias."AddressObjects" USING btree ("AOID");
+CREATE UNIQUE INDEX ON fias."AddressObjects" USING btree ("AOGUID");
+--CREATE UNIQUE INDEX ON fias."AddressObjects" USING btree ("AOGUID", "ACTSTATUS", "CURRSTATUS");--, "LIVESTATUS"
 CREATE INDEX ON fias."AddressObjects" USING btree ("PARENTGUID");
 
 
