@@ -156,6 +156,8 @@ END;
 $func$ LANGUAGE plpgsql;
 
 ---select * from fias.search_formalname('{моск, корол}'::text[]) order by weight desc, array_to_string("AOLEVEL", '')::int;
+--select * from fias.search_formalname('{моск, корол}'::text[]) order by weight desc, array_to_string("AOLEVEL", '')::int, array_to_string("FORMALNAME", '');
+
 
 CREATE OR REPLACE FUNCTION fias.aoguid_parents(uuid)
 RETURNS  SETOF fias."AddressObjects"

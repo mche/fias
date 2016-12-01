@@ -63,8 +63,8 @@ my %opt = (
   debug=>1,
   xmlfile=>undef, # для полной закачки вручную скачать, распокавать и указать AS_ADDROBJ_20140601_f78af112-09a4-4a17-9eb2-3c40f45e402e.XML
   complete=>undef,# или флажок для полной версии
-  nosave=>0,
-  sqldump=>0,
+  #~ nosave=>0,
+  #~ sqldump=>0,
 );
 GetOptions(
   (map {$_.'=s' => \$opt{$_};} keys %opt),
@@ -181,46 +181,12 @@ $model->вставить_или_обновить($opt{schema}, $opt{config_table
 
 system('rm -f AS_*.XML; rm -f fias_xml.rar');
 
-my %index = (
-  AOLEVEL=>'AOLEVEL',
-  AOGUID =>'AOGUID',
-  PARENTGUID => 'PARENTGUID',
-  ACTSTATUS => 'ACTSTATUS',
-  REGIONCODE => 'REGIONCODE',
-  REGLEVFN => [qw(FORMALNAME AOLEVEL REGIONCODE)],
-  LIVESTATUS => 'LIVESTATUS',
-  code =>'CODE',
-  FTFORMALNAME => 'FORMALNAME',# FULLTEXT
-);
 ###################################### SUB ##########################################################################
 sub process {
   my $xmlfile = shift || glob 'AS_ADDROBJ*.XML';
-  #~ $dbh->begin_work;
-  if ($opt{complete000}) {
-    say "Чикаются все записи $opt{table} и индексы";
-    $dbh->do(<<END_SQL,);
-delete from "$opt{schema}"."$opt{table}";
-END_SQL
-    #~ map {say "Удаляется индекс $_ ..."; $dbh->do(<<END_SQL,); say "OK\n";} keys %index;
-#~ alter table `$opt{table}` drop index `$_`;
-#~ END_SQL
-  }
   say "Обрабатывается файл [$xmlfile]\n"
     if $opt{debug};
   $twig->parsefile($xmlfile);#"AS_ADDROBJ_20130110_0deec9c3-21a8-4510-99f6-c85206f140cd.XML"
-  if ($opt{complete000}) {
-    map {
-      say "Долго [~2-3 минуты] создается индекс $_ ...";
-      $dbh->do(<<END_SQL,);
-alter table $opt{table} add @{[/^FT/ && 'FULLTEXT']} index `$_` (`@{[ref($index{$_}) ? join('`, `', @{$index{$_}}) : $index{$_}]}`);
-END_SQL
-      say "OK\n";
-    } keys %index;
-    #~ say "Долго создается индекс FULLTEXT `FTFORMALNAME ...";
-    #~ $dbh->do(<<END_SQL,);
-#~ ALTER TABLE `$opt{table}` ADD FULLTEXT `FTFORMALNAME` (`FORMALNAME`);
-#~ END_SQL
-  }
   #~ $dbh->commit;
   say "===== ====== ====== ГОТОВО ====== ======= ======= \n";
 
@@ -247,20 +213,19 @@ sub insert_or_replace {
     #~ if ++$n < 20;
   
   #~ say Dumper \%data;
-  $model->_insert($opt{schema}, $opt{table}, undef, $r
+  return $model->_insert($opt{schema}, $opt{table}, undef, $r
   #~ \%data, 
   #~ sub {
 
   #~ },
-  
-  );
+  ) if $opt{complete};
   #~ $count += $n;
   
   #~ %data = ();
   #~ $n=0;
   
-  #~ $model->_try_insert($opt{schema}, $opt{table}, ['AOID'], $r)
-    #~ || $model->_update_distinct($opt{schema}, $opt{table}, ['AOID'], $r);
+  $model->_update_distinct($opt{schema}, $opt{table}, ['AOGUID'], $r)
+    || $model->_try_insert($opt{schema}, $opt{table}, ['AOGUID'], $r);
   
   
 }
