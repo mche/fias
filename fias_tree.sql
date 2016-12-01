@@ -24,6 +24,7 @@ RETURNS TABLE (
  "FORMALNAME" text
 ) AS
 $BODY$
+/***********************************************************************/
 DECLARE
  c_ActualStatusCode CONSTANT INTEGER :=1; /* Признак актуальной записи  */
                                     /* адресообразующего элемента */

@@ -1,5 +1,38 @@
+CREATE or REPLACE FUNCTION fias.match_array(text, text[])
+RETURNS int2 AS $$
+--select fias.match_array('фокиэ пермэ'::text, '{фоки1,пер,3}'::text[]);
+DECLARE
+  --s boolean[] := array[]::boolean[];
+  s int2 := 0;
+  x text;
+BEGIN
+  --FOR i IN 1..array_upper($2, 1) LOOP
+  FOREACH x IN ARRAY $2 LOOP
+    IF $1 ~ x THEN
+      --RAISE NOTICE '% ~ %', $1, x;
+      --RETURN true;
+      s := s + 1;
+    END IF;
+    --s[i] := $1 ~ $2[i];
+    --PERFORM array_append(s, );
+  END LOOP;
+  RETURN s;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION fias.search_formalname(text[])
+RETURNS  TABLE("AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "PARENT_MATCH" int2[])
+--TABLE("AOGUID" uuid, "PARENTGUID" uuid, "AOLEVEL" int2)
+AS $func$
 --explain
-select count(*)
+select
+--distinct
+  Array["l3AOGUID", "l4AOGUID", "l5AOGUID", "l6AOGUID", "l7AOGUID"],
+  array["l3PARENTGUID", "l4PARENTGUID", "l5PARENTGUID", "l6PARENTGUID", "l7PARENTGUID"],
+  array["l3AOLEVEL", "l4AOLEVEL", "l5AOLEVEL", "l6AOLEVEL", "l7AOLEVEL"],
+  Array["l3FORMALNAME", "l4FORMALNAME", "l5FORMALNAME", "l6FORMALNAME", "l7FORMALNAME"],
+  array["l3PARENT_MATCH", "l4PARENT_MATCH", "l5PARENT_MATCH", "l6PARENT_MATCH"]
+  
 from (
 SELECT 
   --l4.l7AOID AS aoid,
@@ -12,6 +45,7 @@ SELECT
   l3."AOID" AS "l3AOID",
   l3."AOGUID" AS "l3AOGUID",
   l3."PARENTGUID" AS "l3PARENTGUID",
+  fias.match_array(l3."FORMALNAME", $1) as "l3PARENT_MATCH",
   
   l4.*
 FROM (SELECT
@@ -24,6 +58,7 @@ FROM (SELECT
   l4."AOLEVEL" AS "l4AOLEVEL",
   --l4.CENTSTATUS AS l4CENTSTATUS,
   l4."AOID" AS "l4AOID",
+  fias.match_array(l4."FORMALNAME", $1) as "l4PARENT_MATCH",
   -- 
   
   l5.*
@@ -37,6 +72,8 @@ FROM (SELECT
   l5."AOLEVEL" AS "l5AOLEVEL",
   --l5.CENTSTATUS AS l5CENTSTATUS,
   l5."AOID" AS "l5AOID",
+  fias.match_array(l5."FORMALNAME", $1) as "l5PARENT_MATCH",
+  
   l6.*
 FROM (SELECT
   l6.id AS l6id,
@@ -48,6 +85,7 @@ FROM (SELECT
   l6."AOLEVEL" AS "l6AOLEVEL",
   --l6."CENTSTATUS" AS l6CENTSTATUS,
   l6."AOID" AS "l6AOID",
+  fias.match_array(l6."FORMALNAME", $1) as "l6PARENT_MATCH",
   
   l7.*
 FROM (SELECT
@@ -57,12 +95,12 @@ FROM (SELECT
   "AOGUID" AS "l7AOGUID",
   "PARENTGUID" AS "l7PARENTGUID",
   "AOLEVEL" AS "l7AOLEVEL",
-  --CENTSTATUS AS l7CENTSTATUS,
+  --"CENTSTATUS" AS "l7CENTSTATUS",
   "AOID" AS "l7AOID"
         FROM
           fias."AddressObjects"
         WHERE 
-        lower("FORMALNAME") ~ 'мас'
+        lower("FORMALNAME") ~ $1[1] or (array_length($1, 1) > 1 and lower("FORMALNAME") ~ $1[array_length($1, 1)])
         and "ACTSTATUS" = 1
 ) l7
 LEFT JOIN fias."AddressObjects" l6 	ON
@@ -76,5 +114,5 @@ LEFT JOIN fias."AddressObjects" l4 	ON
 ) l4
 LEFT JOIN fias."AddressObjects" l3 	ON
           l3."ACTSTATUS" = 1 AND l4."l4PARENTGUID" = l3."AOGUID" --AND l3.id<>l4.l4id --  AND l3.REGIONCODE = regcode 
-) a
-;
+) a;
+$func$ LANGUAGE SQL;

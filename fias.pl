@@ -72,7 +72,7 @@ GetOptions(
 
 say Dumper(\%opt) if $opt{debug};
 
-my $dbh = Mojo::Pg::Che->connect("DBI:Pg:dbname=$opt{dbname};host=$opt{dbhost}", $opt{dblogin}, $opt{dbpasswd})->max_connections(50)
+my $dbh = Mojo::Pg::Che->connect("DBI:Pg:dbname=$opt{dbname};host=$opt{dbhost}", $opt{dblogin}, $opt{dbpasswd})->max_connections(70)
   or die;
 my $model = Model::Base->singleton(dbh=>$dbh, template_vars=>{}, mt=>{tag_start=>'{%', tag_end=>'%}'})->sth_cached(1);
 my $config = $dbh->selectall_hashref(<<END_SQL, 'key', undef, ('^update_'));
@@ -229,14 +229,36 @@ END_SQL
 }
 
 my $count = 0;
-my $cb = sub {
-  say sprintf("Обработана строка [%s]", $count++)
-    if $opt{debug};
-};
+#~ my %data = ();# пачка строк
+#~ my $n = 0;# размерность пачки строк вставки
 sub insert_or_replace {
   my $r = shift;
   
-  $model->_insert($opt{schema}, $opt{table}, ['AOID'], $r, $cb);
+  say sprintf("Обработано строк [%s]", ++$count)
+    if $opt{debug};
+  
+  return
+    unless $r->{"ACTSTATUS"};
+
+  #~ $data{$_}[$n] = $r->{$_}
+    #~ for keys %$r;
+  
+  #~ return
+    #~ if ++$n < 20;
+  
+  #~ say Dumper \%data;
+  $model->_insert($opt{schema}, $opt{table}, undef, $r
+  #~ \%data, 
+  #~ sub {
+
+  #~ },
+  
+  );
+  #~ $count += $n;
+  
+  #~ %data = ();
+  #~ $n=0;
+  
   #~ $model->_try_insert($opt{schema}, $opt{table}, ['AOID'], $r)
     #~ || $model->_update_distinct($opt{schema}, $opt{table}, ['AOID'], $r);
   

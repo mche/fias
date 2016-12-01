@@ -1,7 +1,7 @@
 ALTER TABLE fias."AddressObjects" ADD CONSTRAINT AddressObjects_pkey PRIMARY KEY("id");
 CREATE UNIQUE INDEX ON fias."AddressObjects" USING btree ("AOID");
 CREATE INDEX ON fias."AddressObjects" USING btree ("AOGUID");
---CREATE UNIQUE INDEX ON fias."AddressObjects" USING btree ("AOGUID", "ACTSTATUS", "CURRSTATUS", "LIVESTATUS");
+CREATE UNIQUE INDEX ON fias."AddressObjects" USING btree ("AOGUID", "ACTSTATUS", "CURRSTATUS");--, "LIVESTATUS"
 CREATE INDEX ON fias."AddressObjects" USING btree ("PARENTGUID");
 
 
@@ -63,3 +63,20 @@ UNION ALL
 )
 SELECT * FROM child_to_parents ORDER BY "AOLEVEL";
 $$ LANGUAGE SQL;
+
+CREATE OR REPLACE FUNCTION public.unnest_dim2(anyarray)
+RETURNS SETOF anyarray AS
+$function$
+DECLARE
+    s $1%TYPE;
+BEGIN
+    FOREACH s SLICE 1  IN ARRAY $1 LOOP
+        RETURN NEXT s;
+    END LOOP;
+    RETURN;
+END;
+$function$
+LANGUAGE plpgsql IMMUTABLE;
+
+
+
