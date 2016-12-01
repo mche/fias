@@ -1,20 +1,24 @@
-CREATE or REPLACE FUNCTION fias.match_weight(text, text[])
+CREATE or REPLACE FUNCTION fias.match_weight(text[], text[])
 RETURNS int2 AS $$
 --select fias.match_weight('фокиэ пермэ'::text, '{фоки1,пер,3}'::text[]);
 DECLARE
   --s boolean[] := array[]::boolean[];
+  len int := array_length($1, 1);
+  --s int2[] := ('{' || repeat('0,', len-1) || '0}')::int2[];
   s int2 := 0;
   x text;
 BEGIN
-  --FOR i IN 1..array_upper($2, 1) LOOP
-  FOREACH x IN ARRAY $2 LOOP
-    IF lower($1) ~ lower(x) THEN
-      --RAISE NOTICE '% ~ %', $1, x;
-      --RETURN true;
-      s := s + 1;
-    END IF;
-    --s[i] := $1 ~ $2[i];
-    --PERFORM array_append(s, );
+  FOR i IN 1..len LOOP
+    FOREACH x IN ARRAY $2 LOOP
+      IF lower($1[i]) ~ lower(x) THEN
+        --RAISE NOTICE '% ~ %', $1, x;
+        --RETURN true;
+        --s[i] := s[i] + 1;
+        s := s + 1;
+      END IF;
+      --s[i] := $1 ~ $2[i];
+      --PERFORM array_append(s, );
+    END LOOP;
   END LOOP;
   RETURN s;
 END;
@@ -136,15 +140,18 @@ IF len > 1 THEN
   aa := $1[2:len];-- со второго до последнего 
   bb := $1[1:len-1]; -- с первого до предпоследнего
   RETURN QUERY
-  select fias.match_weight(array_to_string(s."FORMALNAME"[1:4], ' '), aa), *
-  from fias.search_formalname(a) s
-  where  fias.match_weight(array_to_string(s."FORMALNAME"[1:4], ' '), aa) > 0
-  
-  union
-  
-  select fias.match_weight(array_to_string(s."FORMALNAME"[1:4], ' '), bb), *
-  from fias.search_formalname(b) s
-  where  fias.match_weight(array_to_string(s."FORMALNAME"[1:4], ' '), bb) > 0;
+  select fias.match_weight(u."FORMALNAME"[1:4], aa) + fias.match_weight(u."FORMALNAME"[1:4], bb), *
+  from (
+    select *
+    from fias.search_formalname(a) s
+    where  fias.match_weight(s."FORMALNAME"[1:4], aa) > 0
+    
+    union
+    
+    select *
+    from fias.search_formalname(b) s
+    where  fias.match_weight(s."FORMALNAME"[1:4], bb) > 0
+  ) u;
 ELSE
   RETURN QUERY
   select null::int2, *

@@ -1,6 +1,8 @@
 =pod
 Полностью закачка или обновление дельты
 
+http://fias.nalog.ru/Updates.aspx
+
 Полностью:
 =========
 Запрос
@@ -54,7 +56,7 @@ $ua->agent('ELK');
 my %opt = (
   url => 'http://fias.nalog.ru/WebServices/Public/DownloadService.asmx',#http://fias.nalog.ru/WebServices/Public/DownloadService.asmx
   schema => 'fias',
-  table => 'AddressObjects2',
+  table => 'AddressObjects',
   config_table => 'config',
   dbname => 'test',
   dbhost => '127.0.0.1',
@@ -224,8 +226,9 @@ sub insert_or_replace {
   #~ %data = ();
   #~ $n=0;
   
-  $model->_update_distinct($opt{schema}, $opt{table}, ['AOGUID'], $r)
-    || $model->_try_insert($opt{schema}, $opt{table}, ['AOGUID'], $r);
+  $model->_try_insert($opt{schema}, $opt{table}, ['AOGUID'], $r)
+    || $model->_update_distinct($opt{schema}, $opt{table}, ['AOGUID'], $r)
+  ;
   
   
 }
@@ -235,17 +238,4 @@ sub insert_or_replace {
 
 #~ $ perl -w -MXML::Twig -e 'binmode(STDOUT, ":utf8"); XML::Twig->new(twig_roots   => {"Object"=>sub{my( $t, $elt)= @_; $elt->print; print "\n"; $t->purge;}})->parsefile("AS_ADDROBJ_20130110_0deec9c3-21a8-4510-99f6-c85206f140cd.XML");'
 
-__END__
-
-    Добавляем расширение для работы с триграммами
-    CREATE EXTENSION IF NOT EXISTS pg_trgm;
-    Создаем индекс на нужном поле
-    CREATE INDEX addrobj_formalname_idx ON addrobj USING gist (formalname gist_trgm_ops);
-    -- trigram indexes to speed up text searches
-    CREATE INDEX formalname_trgm_idx on addrobj USING gin (formalname gin_trgm_ops);
-    CREATE INDEX offname_trgm_idx on addrobj USING gin (offname gin_trgm_ops);
-    Теперь ищем
-    select * from addrobj where formalname ~ 'ростов';
-
-Всё ура!, теперь поиск происходит за пол секунды
 
