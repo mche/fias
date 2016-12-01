@@ -49,10 +49,10 @@ create table if not exists fias."AddressObjects2" (
 
 
 /*
-                                      Таблица "fias.AddressObjects"
-  Столбец   |          Тип           |                            Модификаторы                            
-------------+------------------------+--------------------------------------------------------------------
- id         | integer                | NOT NULL DEFAULT nextval('fias."AddressObjects_id_seq"'::regclass)
+
+                                       Таблица "fias.AddressObjects"
+  Столбец   |          Тип           |                            Модификаторы                             
+------------+------------------------+---------------------------------------------------------------------
  AOGUID     | uuid                   | NOT NULL
  FORMALNAME | text                   | NOT NULL
  REGIONCODE | character(2)           | NOT NULL
@@ -91,12 +91,18 @@ create table if not exists fias."AddressObjects2" (
  LIVESTATUS | boolean                | NOT NULL
  CADNUM     | character varying(120) | 
  DIVTYPE    | smallint               | 
+ id         | integer                | NOT NULL DEFAULT nextval('fias."AddressObjects_id_seq1"'::regclass)
+ 
 Индексы:
-    "addressobjects_pkey" PRIMARY KEY, btree (id)
-    "AddressObjects_AOID_idx" UNIQUE, btree ("AOID")
-    "AddressObjects_AOGUID_idx" btree ("AOGUID")
-    "AddressObjects_PARENTGUID_idx" btree ("PARENTGUID")
-    "AddressObjects_lower_idx" gin (lower("FORMALNAME") gin_trgm_ops)
+    "AddressObjects_pkey" PRIMARY KEY, btree (id)
+    "AddressObjects2_AOGUID_idx" UNIQUE, btree ("AOGUID")
+    "AddressObjects2_PARENTGUID_idx" btree ("PARENTGUID")
+    "AddressObjects_lower_idx1" gin (lower("FORMALNAME") gin_trgm_ops)
+
+Ограничения внешнего ключа:
+    "addressobjects_parentguid_fkey" FOREIGN KEY ("PARENTGUID") REFERENCES fias."AddressObjects"("AOGUID")
+Ссылки извне:
+    TABLE "fias."AddressObjects"" CONSTRAINT "addressobjects_parentguid_fkey" FOREIGN KEY ("PARENTGUID") REFERENCES fias."AddressObjects"("AOGUID")
 
 
 */

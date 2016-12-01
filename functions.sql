@@ -21,7 +21,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION fias.search_formalname(text)
-RETURNS  TABLE("AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[], "CENTSTATUS" int2[], id int[])--, "PARENT_MATCH" int2[])
+RETURNS  TABLE("AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[],  id int[])--, "CENTSTATUS" int2[],
 AS $func$
 --explain
 select
@@ -31,7 +31,7 @@ select
   array["l3AOLEVEL", "l4AOLEVEL", "l5AOLEVEL", "l6AOLEVEL", "l7AOLEVEL"],
   Array["l3FORMALNAME", "l4FORMALNAME", "l5FORMALNAME", "l6FORMALNAME", "l7FORMALNAME"],
   Array["l3SHORTNAME", "l4SHORTNAME", "l5SHORTNAME", "l6SHORTNAME", "l7SHORTNAME"],
-  Array["l3CENTSTATUS", "l4CENTSTATUS", "l5CENTSTATUS", "l6CENTSTATUS", "l7CENTSTATUS"],
+  --Array["l3CENTSTATUS", "l4CENTSTATUS", "l5CENTSTATUS", "l6CENTSTATUS", "l7CENTSTATUS"],
   array[l3id, l4id, l5id, l6id, l7id]
   
 from (
@@ -40,8 +40,8 @@ SELECT
   l3."FORMALNAME" AS "l3FORMALNAME",
   l3."SHORTNAME" AS "l3SHORTNAME",
   l3."AOLEVEL" AS "l3AOLEVEL",
-  l3."CENTSTATUS" AS "l3CENTSTATUS",
-  l3."AOID" AS "l3AOID",
+  --l3."CENTSTATUS" AS "l3CENTSTATUS",
+  --l3."AOID" AS "l3AOID",
   l3."AOGUID" AS "l3AOGUID",
   l3."PARENTGUID" AS "l3PARENTGUID",
   
@@ -54,8 +54,8 @@ FROM (SELECT
   l4."AOGUID" AS "l4AOGUID",
   l4."PARENTGUID" AS "l4PARENTGUID",
   l4."AOLEVEL" AS "l4AOLEVEL",
-  l4."CENTSTATUS" AS "l4CENTSTATUS",
-  l4."AOID" AS "l4AOID",
+  --l4."CENTSTATUS" AS "l4CENTSTATUS",
+  --l4."AOID" AS "l4AOID",
   --fias.match_weight(l4."FORMALNAME", $1) as "l4PARENT_MATCH",
   -- 
   
@@ -68,8 +68,8 @@ FROM (SELECT
   l5."AOGUID" AS "l5AOGUID",
   l5."PARENTGUID" AS "l5PARENTGUID",
   l5."AOLEVEL" AS "l5AOLEVEL",
-  l5."CENTSTATUS" AS "l5CENTSTATUS",
-  l5."AOID" AS "l5AOID",
+  --l5."CENTSTATUS" AS "l5CENTSTATUS",
+  --l5."AOID" AS "l5AOID",
   --fias.match_weight(l5."FORMALNAME", $1) as "l5PARENT_MATCH",
   
   l6.*
@@ -81,8 +81,8 @@ FROM (SELECT
   l6."AOGUID" AS "l6AOGUID",
   l6."PARENTGUID" AS "l6PARENTGUID",
   l6."AOLEVEL" AS "l6AOLEVEL",
-  l6."CENTSTATUS" AS "l6CENTSTATUS",
-  l6."AOID" AS "l6AOID",
+  --l6."CENTSTATUS" AS "l6CENTSTATUS",
+  --l6."AOID" AS "l6AOID",
   --fias.match_weight(l6."FORMALNAME", $1) as "l6PARENT_MATCH",
   
   l7.*
@@ -92,9 +92,9 @@ FROM (SELECT
   "SHORTNAME" AS "l7SHORTNAME",
   "AOGUID" AS "l7AOGUID",
   "PARENTGUID" AS "l7PARENTGUID",
-  "AOLEVEL" AS "l7AOLEVEL",
-  "CENTSTATUS" AS "l7CENTSTATUS",
-  "AOID" AS "l7AOID"
+  "AOLEVEL" AS "l7AOLEVEL"
+  --"CENTSTATUS" AS "l7CENTSTATUS",
+  --"AOID" AS "l7AOID"
         FROM
           fias."AddressObjects"
         WHERE 
@@ -122,7 +122,7 @@ $func$ LANGUAGE SQL;
 
 -- финальная функция
 CREATE OR REPLACE FUNCTION fias.search_formalname(text[])
-RETURNS  TABLE(weight int2, "AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[], "CENTSTATUS" int2[], id int[])--, "PAR
+RETURNS  TABLE(weight int2, "AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[],  id int[])--,"CENTSTATUS" int2[],
 AS $func$
 DECLARE
   len int := array_length($1, 1);
@@ -156,3 +156,21 @@ END;
 $func$ LANGUAGE plpgsql;
 
 ---select * from fias.search_formalname('{моск, корол}'::text[]) order by weight desc, array_to_string("AOLEVEL", '')::int;
+
+CREATE OR REPLACE FUNCTION fias.aoguid_parents(uuid)
+RETURNS  SETOF fias."AddressObjects"
+AS $$
+-- вывести полный адрес
+WITH RECURSIVE child_to_parents AS (
+  SELECT a.*
+  FROM fias."AddressObjects" a
+  WHERE a."AOGUID" = $1--'51f21baa-c804-4737-9d5f-9da7a3bb1598'
+UNION ALL
+  SELECT a.*
+  FROM fias."AddressObjects" a, child_to_parents c
+  WHERE a."AOGUID" = c."PARENTGUID"
+        --AND a."CURRSTATUS" = 0
+        --AND a."ACTSTATUS" = 1
+)
+SELECT * FROM child_to_parents ORDER BY "AOLEVEL";
+$$ LANGUAGE SQL;
