@@ -30,13 +30,13 @@ AS $func$
 --explain
 select
 --distinct
-  Array["l3AOGUID", "l4AOGUID", "l5AOGUID", "l6AOGUID", "l7AOGUID"],
-  array["l3PARENTGUID", "l4PARENTGUID", "l5PARENTGUID", "l6PARENTGUID", "l7PARENTGUID"],
-  array["l3AOLEVEL", "l4AOLEVEL", "l5AOLEVEL", "l6AOLEVEL", "l7AOLEVEL"],
-  Array["l3FORMALNAME", "l4FORMALNAME", "l5FORMALNAME", "l6FORMALNAME", "l7FORMALNAME"],
-  Array["l3SHORTNAME", "l4SHORTNAME", "l5SHORTNAME", "l6SHORTNAME", "l7SHORTNAME"],
-  --Array["l3CENTSTATUS", "l4CENTSTATUS", "l5CENTSTATUS", "l6CENTSTATUS", "l7CENTSTATUS"],
-  array[l3id, l4id, l5id, l6id, l7id]
+  Array["l7AOGUID", "l6AOGUID", "l5AOGUID", "l4AOGUID", "l3AOGUID"],
+  array["l7PARENTGUID", "l6PARENTGUID", "l5PARENTGUID", "l4PARENTGUID", "l3PARENTGUID"],
+  array["l7AOLEVEL", "l6AOLEVEL", "l5AOLEVEL", "l4AOLEVEL", "l3AOLEVEL"],
+  Array["l7FORMALNAME", "l6FORMALNAME", "l5FORMALNAME", "l4FORMALNAME", "l3FORMALNAME"],
+  Array["l7SHORTNAME", "l6SHORTNAME", "l5SHORTNAME", "l4SHORTNAME", "l3SHORTNAME"],
+  --Array["l7CENTSTATUS", "l6CENTSTATUS", "l5CENTSTATUS", "l4CENTSTATUS", "l3CENTSTATUS"],
+  array[l7id, l6id, l5id, l4id, l3id]
   
 from (
 SELECT 
@@ -125,8 +125,9 @@ $func$ LANGUAGE SQL;
 
 
 -- финальная функция
+-- на входе массив образцов (регулярки) поиска типа '{\\mревол, \\mподол, \\mмоск}'::text[]
 CREATE OR REPLACE FUNCTION fias.search_formalname(text[])
-RETURNS  TABLE(weight int2, "AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[],  id int[])--,"CENTSTATUS" int2[],
+RETURNS  TABLE(weight int2, "AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[],  id int[], _weight int2)--,"CENTSTATUS" int2[],
 AS $func$
 DECLARE
   len int := array_length($1, 1);
@@ -134,26 +135,35 @@ DECLARE
   b text := $1[len];
   aa text[];
   bb text[];
+  best_match text;
+  best_shortname text[] := array['ул', 'ул.', 'пл', 'пер', 'пр-кт', 'проезд', 'б-р'];
 BEGIN
 
 IF len > 1 THEN
   aa := $1[2:len];-- со второго до последнего 
+  best_match := array_to_string(aa, '.*');
   bb := $1[1:len-1]; -- с первого до предпоследнего
+  
   RETURN QUERY
-  select --fias.match_weight(u."FORMALNAME"[1:4], aa) + fias.match_weight(u."FORMALNAME"[1:4], bb), 
-  *
+  select --fias.match_weight(u."FORMALNAME"[1:4], aa) + fias.match_weight(u."FORMALNAME"[1:4], bb),
+    ((s."SHORTNAME"[1] = any(best_shortname))::int+1)::int2
+    + (((lower(array_to_string(s."FORMALNAME", ' ')) ~ best_match)::int + 1)*100)::int2
+    + s._weight as weight,
+    *
   from (
-    select fias.match_weight(s."FORMALNAME"[1:4], aa) as weight, *
+    select
+      *,
+      fias.match_weight(s."FORMALNAME"[2:5], aa) as _weight
     from fias.search_formalname(a) s
-    --where  fias.match_weight(s."FORMALNAME"[1:4], aa) > 0
+    --where  fias.match_weight(s."FORMALNAME"[2:5], aa) > 0
     
-    --union
+    --union обратный порядок массива образцов (что-то долго два запроса)
     
     --select *
     --from fias.search_formalname(b) s
     --where  fias.match_weight(s."FORMALNAME"[1:4], bb) > 0
-  ) u
-  where  u.weight > 0
+  ) s
+  where  s._weight > 0
   ;
 ELSE
   RETURN QUERY
