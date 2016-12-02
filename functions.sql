@@ -1,6 +1,6 @@
 CREATE or REPLACE FUNCTION fias.match_weight(text[], text[])
 RETURNS int2 AS $$
---select fias.match_weight('фокиэ пермэ'::text, '{фоки1,пер,3}'::text[]);
+-- посчитать общую сумму совпадений (вес) в матрице [тексты X образцы]
 DECLARE
   --s boolean[] := array[]::boolean[];
   len int := array_length($1, 1);
@@ -102,7 +102,7 @@ FROM (SELECT
         FROM
           fias."AddressObjects"
         WHERE 
-        lower("FORMALNAME") ~ lower($1) --[1] or (array_length($1, 1) > 1 and lower("FORMALNAME") ~ $1[array_length($1, 1)])
+        lower("FORMALNAME") ~ lower($1)-- or lower("FORMALNAME") ~ lower($2) --[1] or (array_length($1, 1) > 1 and lower("FORMALNAME") ~ $1[array_length($1, 1)])
         --and "ACTSTATUS" = 1
 ) l7
 LEFT JOIN fias."AddressObjects" l6 	ON
@@ -140,18 +140,21 @@ IF len > 1 THEN
   aa := $1[2:len];-- со второго до последнего 
   bb := $1[1:len-1]; -- с первого до предпоследнего
   RETURN QUERY
-  select fias.match_weight(u."FORMALNAME"[1:4], aa) + fias.match_weight(u."FORMALNAME"[1:4], bb), *
+  select --fias.match_weight(u."FORMALNAME"[1:4], aa) + fias.match_weight(u."FORMALNAME"[1:4], bb), 
+  *
   from (
-    select *
+    select fias.match_weight(s."FORMALNAME"[1:4], aa) as weight, *
     from fias.search_formalname(a) s
-    where  fias.match_weight(s."FORMALNAME"[1:4], aa) > 0
+    --where  fias.match_weight(s."FORMALNAME"[1:4], aa) > 0
     
-    union
+    --union
     
-    select *
-    from fias.search_formalname(b) s
-    where  fias.match_weight(s."FORMALNAME"[1:4], bb) > 0
-  ) u;
+    --select *
+    --from fias.search_formalname(b) s
+    --where  fias.match_weight(s."FORMALNAME"[1:4], bb) > 0
+  ) u
+  where  u.weight > 0
+  ;
 ELSE
   RETURN QUERY
   select null::int2, *
@@ -164,6 +167,8 @@ $func$ LANGUAGE plpgsql;
 
 ---select * from fias.search_formalname('{моск, корол}'::text[]) order by weight desc, array_to_string("AOLEVEL", '')::int;
 --select * from fias.search_formalname('{моск, корол}'::text[]) order by weight desc, array_to_string("AOLEVEL", '')::int, array_to_string("FORMALNAME", '');
+--select * from fias.search_formalname('{\\mревол.*, \\mновг.*}'::text[]) order by weight desc, array_to_string("AOLEVEL", '')::int, array_to_string("FORMALNAME", '');
+
 
 
 CREATE OR REPLACE FUNCTION fias.aoguid_parents(uuid)
