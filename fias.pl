@@ -39,16 +39,17 @@ use Mojo::Base::Che -base, -lib, "../lib";
 binmode(STDOUT, ':utf8');
 binmode(STDERR, ':utf8');
 
-#~ use LWP::UserAgent;
-use LWP::UserAgent::ProgressBar;
+use LWP::UserAgent;
+#~ use LWP::UserAgent::ProgressBar;
 #~ use XML::Parser;
 use XML::Twig;
 use Mojo::Pg::Che;
 use Getopt::Long;
 use Data::Dumper;
 use Model::Base;
-#~ my $ua = LWP::UserAgent->new;
-my $ua = LWP::UserAgent::ProgressBar->new;
+
+my $ua = LWP::UserAgent->new;
+#~ my $ua = LWP::UserAgent::ProgressBar->new;
 $ua->agent('ELK');
 
 
@@ -90,8 +91,8 @@ my $version = $model->_select($opt{schema}, $opt{table}, ["AOGUID"], {AOGUID=>'0
   map(($_ => '00000000-0000-0000-0000-000000000000'), qw(AOGUID AOID)),
   SHORTNAME=>'', # номер версии
   #~ FORMALNAME => '', # текст версии
-  UPDATEDATE => $now, # дата обновления
-  STARTDATE => $now,
+  #~ UPDATEDATE => , # дата обновления
+  #~ STARTDATE => 
   #~ ENDDATE => # дата версии
   map(($_=>'') , qw(REGIONCODE AUTOCODE AREACODE CITYCODE CTARCODE PLACECODE EXTRCODE SEXTCODE) ),
   map(($_=>0) , qw(AOLEVEL ACTSTATUS CENTSTATUS OPERSTATUS CURRSTATUS LIVESTATUS) ),
@@ -107,6 +108,7 @@ my $twig= XML::Twig->new(
         #~ $config->{update_textversion} = $elt->text;
         $version->{FORMALNAME} = $elt->text;
         $version->{ENDDATE} = ($elt->text =~ /(\d+\.\d+\.\d+)/)[0];
+        $version->{STARTDATE} ||= $version->{ENDDATE};
         $version->{UPDATEDATE} = $now;
         $t->purge;},
     'VersionId'=>sub {
@@ -183,15 +185,18 @@ my $url = $opt{complete} ? $fiascompletexmlurl : $fiasdeltaxmlurl;
 die "Не смог url обновления (SOAP запрос)" unless $url;
 
 #~ say Dumper($config); exit;
-say "Загружается Fias@{[$opt{complete} ? 'Complete' : 'Delta']}XmlUrl = [$url] =>>> 'fias_xml.rar'...\n"
+say "Загружается [$url] >>> 'fias_xml.rar'...\n"
   if $opt{debug};
 
-my $get = $ua->get_with_progress($url, ':content_file'=>'fias_xml.rar',);
-$get->is_success or die "Не смог [$url]";
+#~ my $get = $ua->get_with_progress($url, ':content_file'=>'fias_xml.rar',);
+my $get = $ua->get($url, ':content_file'=>'fias_xml.rar',);
+$get->is_success or die "Не смог скачать [$url]";
 
 #~ 
-my $line = grep(/AS_ADDROBJ/, `unrar l fias_xml.rar 2>/dev/null`);
-my $xmlfile = ($line =~ /(AS_ADDROBJ[\w\-]+\.xml)/i)[0];
+my $line = (grep(/AS_ADDROBJ/, `unrar l fias_xml.rar 2>/dev/null`))[0]
+  or die "Нет архива fias_xml.rar";
+my $xmlfile = ($line =~ /(AS_ADDROBJ[\w\-]+\.xml)/i)[0]
+  or die "Нет архивного XML файла";
 
 #~ system('rm -f AS_*.XML; unrar e fias_xml.rar');
 system("rm -f AS_*.XML; unrar e -n'$xmlfile' fias_xml.rar") == 0

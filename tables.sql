@@ -1,10 +1,5 @@
 create schema if not exists fias; 
 
-create table if not exists fias.config (
-  key text not null unique,
-  value text not null
-);
-
 create table if not exists fias."AddressObjects" (
   id serial not null, -- primary key
   "AOGUID" uuid not null, -- unique,--Глобальный уникальный идентификатор адресного объекта
