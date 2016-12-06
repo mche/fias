@@ -84,7 +84,7 @@ my $model = Model::Base->singleton(dbh=>$dbh, template_vars=>{}, mt=>{tag_start=
 my $now = do {#~ my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
   my @lt =  localtime(time);
   sprintf("%s.%s.%s", $lt[3], $lt[4]+1, $lt[5]+1900);
-}
+};
 my $version = $model->_select($opt{schema}, $opt{table}, ["AOGUID"], {AOGUID=>'00000000-0000-0000-0000-000000000000'}) {
   map(($_ => '00000000-0000-0000-0000-000000000000'), qw(AOGUID AOID)),
   SHORTNAME=>'', # номер версии
