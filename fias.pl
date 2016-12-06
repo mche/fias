@@ -237,23 +237,9 @@ sub insert_or_replace {
   return
     unless $r->{"ACTSTATUS"};
 
-  #~ $data{$_}[$n] = $r->{$_}
-    #~ for keys %$r;
-  
-  #~ return
-    #~ if ++$n < 20;
-  
-  #~ say Dumper \%data;
-  return $model->_insert($opt{schema}, $opt{table}, undef, $r
-  #~ \%data, 
-  #~ sub {
+  #~ return $model->_insert($opt{schema}, $opt{table}, undef, $r)
+    #~ if $opt{complete};
 
-  #~ },
-  ) if $opt{complete};
-  #~ $count += $n;
-  
-  #~ %data = ();
-  #~ $n=0;
   
   $model->_try_insert($opt{schema}, $opt{table}, ['AOGUID'], $r)
     || $model->_update_distinct($opt{schema}, $opt{table}, ['AOGUID'], $r)
