@@ -57,7 +57,7 @@ my %opt = (
   url => 'http://fias.nalog.ru/WebServices/Public/DownloadService.asmx',#http://fias.nalog.ru/WebServices/Public/DownloadService.asmx
   schema => 'fias',
   table => 'AddressObjects',
-  config_table => 'config',
+  #~ config_table => 'config',
   dbname => 'test',
   dbhost => '127.0.0.1',
   dblogin => 'postgres',
@@ -77,20 +77,44 @@ say Dumper(\%opt) if $opt{debug};
 my $dbh = Mojo::Pg::Che->connect("DBI:Pg:dbname=$opt{dbname};host=$opt{dbhost}", $opt{dblogin}, $opt{dbpasswd})->max_connections(70)
   or die;
 my $model = Model::Base->singleton(dbh=>$dbh, template_vars=>{}, mt=>{tag_start=>'{%', tag_end=>'%}'})->sth_cached(1);
-my $config = $dbh->selectall_hashref(<<END_SQL, 'key', undef, ('^update_'));
-select * from "$opt{schema}"."$opt{config_table}"
-where key ~ ?;
-END_SQL
+#~ my $config = $dbh->selectall_hashref(<<END_SQL, 'key', undef, ('^update_'));
+#~ select * from "$opt{schema}"."$opt{config_table}"
+#~ where key ~ ?;
+#~ END_SQL
+my $now = do {#~ my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
+  my @lt =  localtime(time);
+  sprintf("%s.%s.%s", $lt[3], $lt[4]+1, $lt[5]+1900);
+}
+my $version = $model->_select($opt{schema}, $opt{table}, ["AOGUID"], {AOGUID=>'00000000-0000-0000-0000-000000000000'}) {
+  map(($_ => '00000000-0000-0000-0000-000000000000'), qw(AOGUID AOID)),
+  SHORTNAME=>'', # номер версии
+  #~ FORMALNAME => '', # текст версии
+  UPDATEDATE => $now, # дата обновления
+  STARTDATE => $now,
+  #~ ENDDATE => # дата версии
+  map(($_=>'') , qw(REGIONCODE AUTOCODE AREACODE CITYCODE CTARCODE PLACECODE EXTRCODE SEXTCODE) ),
+  map(($_=>0) , qw(AOLEVEL ACTSTATUS CENTSTATUS OPERSTATUS CURRSTATUS LIVESTATUS) ),
+};
+
+  
 
 my ($fiasdeltaxmlurl, $fiascompletexmlurl);
 my $twig= XML::Twig->new(
   twig_roots => {
-    'TextVersion'=>sub {my( $t, $elt)= @_; $config->{update_textversion} = $elt->text; $t->purge;},
+    'TextVersion'=>sub {
+        my( $t, $elt)= @_;
+        #~ $config->{update_textversion} = $elt->text;
+        $version->{FORMALNAME} = $elt->text;
+        $version->{ENDDATE} = ($elt->text =~ /(\d+\.\d+\.\d+)/)[0];
+        $version->{UPDATEDATE} = $now;
+        $t->purge;},
     'VersionId'=>sub {
         my( $t, $elt)= @_;
         die "Версия [@{[$elt->text]}] обновления не новая! Выход."
-          if $config->{update_versionid}{value} eq $elt->text;
-        $config->{update_versionid} = $elt->text;
+          #~ if $config->{update_versionid}{value} eq $elt->text;
+          if $version->{SHORTNAME} eq $elt->text;
+        #~ $config->{update_versionid} = $elt->text;
+        $version->{SHORTNAME} = $elt->text;
         $t->purge;
       },#say $versionid;
     'FiasDeltaXmlUrl'=>sub {
@@ -114,10 +138,8 @@ my $twig= XML::Twig->new(
       }
       elsif (!$opt{nosave}) {
         insert_or_replace($r);
-        #~ say Dumper($r);
       }
       $t->purge;
-      #~ print ".";
     },
   },
 );
@@ -178,8 +200,9 @@ system("rm -f AS_*.XML; unrar e -n'$xmlfile' fias_xml.rar") == 0
 
 process($xmlfile);
 
-$model->вставить_или_обновить($opt{schema}, $opt{config_table}, ['key'], {key=>$_, value=>$config->{$_}})
-  for keys %$config;# сохранить версию
+#~ $model->вставить_или_обновить($opt{schema}, $opt{config_table}, ['key'], {key=>$_, value=>$config->{$_}})
+  #~ for keys %$config;# сохранить версию
+$model->вставить_или_обновить($opt{schema}, $opt{table}, ['AOGUID'], $version);# сохранить версию
 
 system('rm -f AS_*.XML; rm -f fias_xml.rar');
 

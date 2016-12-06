@@ -5,7 +5,7 @@ create table if not exists fias.config (
   value text not null
 );
 
-create table if not exists fias."AddressObjects2" (
+create table if not exists fias."AddressObjects" (
   id serial not null, -- primary key
   "AOGUID" uuid not null, -- unique,--Глобальный уникальный идентификатор адресного объекта
   "FORMALNAME" text not null, --Формализованное наименование

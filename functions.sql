@@ -167,7 +167,7 @@ IF len > 1 THEN
   ;
 ELSE
   RETURN QUERY
-  select null::int2, *
+  select null::int2, *, null::int2
   from fias.search_formalname(a) s;
 END IF;
 
