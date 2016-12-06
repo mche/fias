@@ -1,7 +1,6 @@
 package Model::Base;
 use Mojo::Base 'DBIx::Mojo::Model';
 
-
 has qw(sth_cached);# тотально для всех запросов
 
 sub вставить_или_обновить {

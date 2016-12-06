@@ -55,7 +55,13 @@
 
 Пример запуска:
 
-  select * from fias.search_formalname('{\\mкрасный яр, \\mсамар}'::text[]) order by weight desc, array_to_string("AOLEVEL", '')::int, array_to_string("FORMALNAME", '');
+  select *
+  from fias.search_formalname('{\\mкрасный яр, \\mсамар}'::text[])
+  order by
+    weight desc,
+    array_to_string("AOLEVEL", '')::int,
+    array_to_string("FORMALNAME", '')
+  ;
 
 
 
