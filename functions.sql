@@ -196,5 +196,24 @@ UNION ALL
         --AND a."CURRSTATUS" = 0
         --AND a."ACTSTATUS" = 1
 )
-SELECT * FROM child_to_parents ORDER BY "AOLEVEL";
+SELECT *
+FROM child_to_parents
+-- ORDER BY "AOLEVEL" desc
+;
 $$ LANGUAGE SQL;
+
+--select uuid, array_agg("FORMALNAME") as "FORMALNAME", array_agg("SHORTNAME") as "SHORTNAME" from (select 'fdb16823-586f-43d2-a1b4-b1c7c7f00bcd'::uuid as uuid, * from fias.aoguid_parents('fdb16823-586f-43d2-a1b4-b1c7c7f00bcd') order by "AOLEVEL" desc) a group by uuid;
+
+CREATE OR REPLACE FUNCTION fias.aoguid_parents_array(uuid)
+RETURNS TABLE(uuid uuid, "FORMALNAME" text[], "SHORTNAME" varchar(10)[])
+AS $$
+select uuid, array_agg("FORMALNAME") as "FORMALNAME", array_agg("SHORTNAME") as "SHORTNAME" 
+from (
+  select $1 as uuid, *
+  from fias.aoguid_parents($1)
+  order by "AOLEVEL" desc
+) a group by uuid
+;
+$$ LANGUAGE SQL;
+
+--select * from fias.aoguid_parents_array('fdb16823-586f-43d2-a1b4-b1c7c7f00bcd');
