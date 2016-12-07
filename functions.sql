@@ -205,9 +205,9 @@ $$ LANGUAGE SQL;
 --select uuid, array_agg("FORMALNAME") as "FORMALNAME", array_agg("SHORTNAME") as "SHORTNAME" from (select 'fdb16823-586f-43d2-a1b4-b1c7c7f00bcd'::uuid as uuid, * from fias.aoguid_parents('fdb16823-586f-43d2-a1b4-b1c7c7f00bcd') order by "AOLEVEL" desc) a group by uuid;
 
 CREATE OR REPLACE FUNCTION fias.aoguid_parents_array(uuid)
-RETURNS TABLE(uuid uuid, "FORMALNAME" text[], "SHORTNAME" varchar(10)[])
+RETURNS TABLE(uuid uuid, "FORMALNAME" text[], "SHORTNAME" varchar(10)[], "AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], id int[])
 AS $$
-select uuid, array_agg("FORMALNAME") as "FORMALNAME", array_agg("SHORTNAME") as "SHORTNAME" 
+select uuid, array_agg("FORMALNAME") as "FORMALNAME", array_agg("SHORTNAME") as "SHORTNAME" , array_agg("AOGUID") as "AOGUID", array_agg("PARENTGUID") as "PARENTGUID", array_agg("AOLEVEL") as "AOLEVEL", array_agg(id) as id
 from (
   select $1 as uuid, *
   from fias.aoguid_parents($1)

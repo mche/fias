@@ -35,11 +35,6 @@
 
   psql ... < indexes.sql
 
-=head3 Хранение версии
-
-Версия сохраняется в той же таблице fias."AddressObjects"
-
-  select * from fias."AddressObjects" where "AOGUID"='00000000-0000-0000-0000-000000000000';
 
 =head3 Режим 2. Накатывание обновлений
 
@@ -49,11 +44,42 @@
 
 Ставить эту команду в крон-сервис на ежедневный заход. Если сохраненная версия совпадет (нет обновления) - скрипт прервет работу.
 
-=head3 Функции поиска адреса
+=head2 Хранение версии
+
+Версия сохраняется в той же таблице fias."AddressObjects" в строке "AOGUID"='00000000-0000-0000-0000-000000000000'
+
+B<"SHORTNAME"> - номер версии
+
+B<"FORMALNAME"> - описание версии
+
+B<"UPDATEDATE"> - дата обновления (дата отработки скрипта)
+
+B<"ENDDATE"> - дата версии
+
+B<"STARTDATE"> - вообще, дата начала всех запусков скрипта, т.е. устанавливается однократно при первом запуске, последующие запуски не изменяют это поле
+
+
+  select *
+  from fias."AddressObjects"
+  where "AOGUID"='00000000-0000-0000-0000-000000000000';
+
+=head2 Функции
+
+Добавляются в схему fias.
 
   psql ... < functions.sql
 
-Пример запуска:
+=head3 Поиск адреса - fias.search_formalname(text[])
+
+На входе: массив образцов поиска, B<ВАЖНО> - от малого адреса к большему.
+
+Возвращает: массивы колонок ("AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[],  id int[]) и условные веса (weight int2, _weight int2).
+
+Первые элементы "AOGUID"[1] и id[1] - уникальные идентификаторы найденного адреса, которые нужно сохранять в своих таблицах. Разворачивание адреса по его AOGUID - см. ниже функцию fias.aoguid_parents_array(uuid)
+
+Вес weight нужен для сортировки предпочтительного адреса.
+
+Пример:
 
   select *
   from fias.search_formalname('{\\mкрасный яр, \\mсамар}'::text[]) -- \m - начало слова
@@ -61,9 +87,38 @@
     weight desc,
     array_to_string("AOLEVEL", '')::int,
     array_to_string("FORMALNAME", '')
+  limit 10
   ;
 
-Возвращает массивы колонок для сбора полного адреса. При этом первые элементы "AOGUID"[1] и id[1] - уникальные идентификаторы найденного адреса.
+=head3 Сборка адреса по всем "родителям" - fias.aoguid_parents(uuid)
+
+На входе: AOGUID адреса
+
+На выходе: рекурсивная сборка родительских строк таблицы fias."AddressObjects" для указанного AOGUID
+
+Пример:
+
+  select *
+  from fias.aoguid_parents('51f21baa-c804-4737-9d5f-9da7a3bb1598')
+  order by "AOLEVEL"
+  ;
+
+=head3 Сборка адреса по всем "родителям" в одну строку - fias.aoguid_parents_array(uuid)
+
+На входе: AOGUID адреса
+
+На выходе: (uuid uuid, "FORMALNAME" text[], "SHORTNAME" varchar(10)[], "AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], id int[]).
+
+Массивы соответственно рекурсивные сборки от текущей адресной строки до верха "родителей".
+
+"AOGUID"[1] cоответствует входному/выходному uuid.
+
+Пример:
+
+  select *
+  from fias.aoguid_parents_array('51f21baa-c804-4737-9d5f-9da7a3bb1598')
+  ;
+
 
 
 =cut
