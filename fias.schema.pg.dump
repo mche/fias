@@ -1,0 +1,745 @@
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 9.5.4
+-- Dumped by pg_dump version 9.5.4
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SET check_function_bodies = false;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: fias; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA fias;
+
+
+SET search_path = fias, pg_catalog;
+
+SET default_tablespace = '';
+
+SET default_with_oids = false;
+
+--
+-- Name: AddressObjects; Type: TABLE; Schema: fias; Owner: -
+--
+
+CREATE TABLE "AddressObjects" (
+    "AOGUID" uuid NOT NULL,
+    "FORMALNAME" text NOT NULL,
+    "REGIONCODE" character(2) NOT NULL,
+    "AUTOCODE" character(1) NOT NULL,
+    "AREACODE" character(3) NOT NULL,
+    "CITYCODE" character(3) NOT NULL,
+    "CTARCODE" character(3) NOT NULL,
+    "PLACECODE" character(3) NOT NULL,
+    "STREETCODE" character(4),
+    "EXTRCODE" character(4) NOT NULL,
+    "SEXTCODE" character(3) NOT NULL,
+    "OFFNAME" text,
+    "POSTALCODE" character(6),
+    "IFNSFL" character(4),
+    "TERRIFNSFL" character(4),
+    "IFNSUL" character(4),
+    "TERRIFNSUL" character(4),
+    "OKATO" character varying(11),
+    "OKTMO" character varying(11),
+    "UPDATEDATE" date NOT NULL,
+    "SHORTNAME" character varying(10) NOT NULL,
+    "AOLEVEL" smallint NOT NULL,
+    "PARENTGUID" uuid,
+    "AOID" uuid NOT NULL,
+    "PREVID" uuid,
+    "NEXTID" uuid,
+    "CODE" character varying(17),
+    "PLAINCODE" character varying(15),
+    "ACTSTATUS" smallint NOT NULL,
+    "CENTSTATUS" smallint NOT NULL,
+    "OPERSTATUS" smallint NOT NULL,
+    "CURRSTATUS" smallint NOT NULL,
+    "STARTDATE" date NOT NULL,
+    "ENDDATE" date NOT NULL,
+    "NORMDOC" uuid,
+    "LIVESTATUS" boolean NOT NULL,
+    "CADNUM" character varying(120),
+    "DIVTYPE" smallint,
+    id integer NOT NULL
+);
+
+
+--
+-- Name: aoguid_parents(uuid); Type: FUNCTION; Schema: fias; Owner: -
+--
+
+CREATE FUNCTION aoguid_parents(uuid) RETURNS SETOF "AddressObjects"
+    LANGUAGE sql
+    AS $_$
+-- вывести полный адрес
+WITH RECURSIVE child_to_parents AS (
+  SELECT a.*
+  FROM fias."AddressObjects" a
+  WHERE a."AOGUID" = $1--'51f21baa-c804-4737-9d5f-9da7a3bb1598'
+UNION ALL
+  SELECT a.*
+  FROM fias."AddressObjects" a, child_to_parents c
+  WHERE a."AOGUID" = c."PARENTGUID"
+        --AND a."CURRSTATUS" = 0
+        --AND a."ACTSTATUS" = 1
+)
+SELECT *
+FROM child_to_parents
+-- ORDER BY "AOLEVEL" desc
+;
+$_$;
+
+
+--
+-- Name: aoguid_parents_array(uuid); Type: FUNCTION; Schema: fias; Owner: -
+--
+
+CREATE FUNCTION aoguid_parents_array(uuid) RETURNS TABLE(uuid uuid, "FORMALNAME" text[], "SHORTNAME" character varying[], "AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" smallint[], id integer[])
+    LANGUAGE sql
+    AS $_$
+select uuid, array_agg("FORMALNAME") as "FORMALNAME", array_agg("SHORTNAME") as "SHORTNAME" , array_agg("AOGUID") as "AOGUID", array_agg("PARENTGUID") as "PARENTGUID", array_agg("AOLEVEL") as "AOLEVEL", array_agg(id) as id
+from (
+  select $1 as uuid, *
+  from fias.aoguid_parents($1)
+  order by "AOLEVEL" desc
+) a group by uuid
+;
+$_$;
+
+
+--
+-- Name: f_addressobjecttree(uuid, integer); Type: FUNCTION; Schema: fias; Owner: -
+--
+
+CREATE FUNCTION f_addressobjecttree(a_aoguid uuid, a_currstatus integer DEFAULT NULL::integer) RETURNS TABLE("AOID" uuid, "AOGUID" uuid, "CURRSTATUS" integer, "ACTSTATUS" integer, "AOLEVEL" integer, "SHORTNAME" character varying, "FORMALNAME" text)
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+ c_ActualStatusCode CONSTANT INTEGER :=1; /* Признак актуальной записи  */
+                                    /* адресообразующего элемента */
+ c_NotActualStatusCode CONSTANT INTEGER :=0;	/* Значение кода актуальной записи */
+ v_AOID     uuid;	 /* ИД адресообразующего элемента */
+ v_AOGUID     uuid;	 /* ИД адресообразующего элемента */
+ v_ParentGUID uuid; /* Идентификатор родительского элемента */
+ v_CurrStatus    INTEGER; /* Статус актуальности КЛАДР 4*/
+ v_ActStatus     INTEGER; /* Статус актуальности */
+                                    /* адресообразующего элемента ФИАС. */
+ v_AOLevel      INTEGER; /*Уровень адресообразующего элемента  */
+ v_ShortName  VARCHAR(10); /* Краткое наименование типа элемента */
+ v_FormalName text; /* Формализованное наименование элемента */
+ v_Return_Error INTEGER;  /* Код возврата */
+/***********************************************************************/
+ BEGIN
+ IF a_CurrStatus IS NOT NULL THEN
+    SELECT INTO 
+    v_AOID, v_AOGUID, v_ParentGUID, v_CurrStatus, v_ActStatus, v_AOLevel, v_ShortName, v_FormalName
+    ao."AOID", ao."AOGUID",ao."PARENTGUID",ao."CURRSTATUS",ao."ACTSTATUS",ao."AOLEVEL", ao."SHORTNAME", ao."FORMALNAME"
+    FROM fias."AddressObjects" ao
+    WHERE ao."AOGUID"=a_AOGUID AND ao."CURRSTATUS"=a_CurrStatus;
+ ELSE
+    SELECT INTO
+    v_AOID, v_AOGUID,v_ParentGUID,v_CurrStatus,v_ActStatus,v_AOLevel, v_ShortName, v_FormalName
+    ao."AOID", ao."AOGUID",ao."PARENTGUID",ao."CURRSTATUS",ao."ACTSTATUS",ao."AOLEVEL", ao."SHORTNAME", ao."FORMALNAME"
+    FROM fias."AddressObjects" ao
+    WHERE ao."AOGUID"=a_AOGUID AND ao."ACTSTATUS"=c_ActualStatusCode;
+  ---------------------------------------------------------------
+   IF NOT FOUND THEN
+      SELECT INTO
+      v_AOID, v_AOGUID,v_ParentGUID,v_CurrStatus,v_ActStatus,v_AOLevel, v_ShortName, v_FormalName
+      ao."AOID", ao."AOGUID",ao."PARENTGUID",ao."CURRSTATUS",ao."ACTSTATUS",ao."AOLEVEL", ao."SHORTNAME", ao."FORMALNAME"
+      FROM fias."AddressObjects" ao
+      WHERE ao."AOGUID"=a_AOGUID 
+         AND ao."ACTSTATUS"=c_NotActualStatusCode
+         AND ao."CURRSTATUS" = (SELECT MAX(iao."CURRSTATUS") 
+                                          FROM fias."AddressObjects" iao 
+                                          WHERE ao."AOGUID" = iao."AOGUID");
+    END IF;
+ END IF;
+ RETURN QUERY
+ SELECT v_AOID, v_AOGUID,v_CurrStatus,v_ActStatus,v_AOLevel, v_ShortName,v_FormalName;
+ ----------------------------------------------------------------
+ WHILE  v_ParentGUID IS NOT NULL LOOP
+     SELECT INTO
+     v_AOID, v_AOGUID,v_ParentGUID,v_CurrStatus,v_ActStatus,v_AOLevel, v_ShortName, v_FormalName
+     ao."AOID", ao."AOGUID",ao."PARENTGUID",ao."CURRSTATUS",ao."ACTSTATUS",ao."AOLEVEL", ao."SHORTNAME",ao."FORMALNAME"
+     FROM fias."AddressObjects" ao
+     WHERE ao."AOGUID"=v_ParentGUID AND ao."ACTSTATUS"=c_ActualStatusCode;
+     ---------------------------------------------------
+      IF NOT FOUND THEN   
+         SELECT INTO
+         v_AOID, v_AOGUID,v_ParentGUID,v_CurrStatus,v_ActStatus,v_AOLevel, v_ShortName,v_FormalName
+         ao."AOID", ao."AOGUID",ao."PARENTGUID",ao."CURRSTATUS",ao."ACTSTATUS",ao."AOLEVEL", ao."SHORTNAME",ao."FORMALNAME"
+             FROM fias."AddressObjects" ao
+             WHERE ao."AOGUID"=v_ParentGUID 
+                  AND ao."ACTSTATUS"=c_NotActualStatusCode
+                  AND ao."CURRSTATUS" = (SELECT MAX(iao."CURRSTATUS") 
+                                                   FROM fias."AddressObjects" iao 
+                                                   WHERE ao."AOGUID" = iao."AOGUID");
+      END IF;	
+      RETURN QUERY
+      SELECT v_AOID, v_AOGUID,v_CurrStatus,v_ActStatus,v_AOLevel,v_ShortName, v_FormalName;
+ END LOOP;
+END;
+$$;
+
+
+--
+-- Name: FUNCTION f_addressobjecttree(a_aoguid uuid, a_currstatus integer); Type: COMMENT; Schema: fias; Owner: -
+--
+
+COMMENT ON FUNCTION f_addressobjecttree(a_aoguid uuid, a_currstatus integer) IS 'Возвращает дерево (список взаимосвязанных строк) 
+     с характеристиками адресообразующего элемента
+     
+     SELECT * FROM fias.f_AddressObjectTree(''719b789d-2476-430a-89cd-3fedc643d821'',51) ORDER BY rtf_AOLevel;
+     SELECT * FROM fias.f_AddressObjectTree(''719b789d-2476-430a-89cd-3fedc643d821'') ORDER BY rtf_AOLevel;
+     ';
+
+
+--
+-- Name: match_weight(text[], text[]); Type: FUNCTION; Schema: fias; Owner: -
+--
+
+CREATE FUNCTION match_weight(text[], text[]) RETURNS smallint
+    LANGUAGE plpgsql
+    AS $_$
+-- посчитать общую сумму совпадений (вес) в матрице [тексты X образцы]
+DECLARE
+  --s boolean[] := array[]::boolean[];
+  len int := array_length($1, 1);
+  --s int2[] := ('{' || repeat('0,', len-1) || '0}')::int2[];
+  s int2 := 0;
+  x text;
+BEGIN
+  FOR i IN 1..len LOOP
+    FOREACH x IN ARRAY $2 LOOP
+      IF lower($1[i]) ~ lower(x) THEN
+        --RAISE NOTICE '% ~ %', $1, x;
+        --RETURN true;
+        --s[i] := s[i] + 1;
+        s := s + 1;
+      END IF;
+      --s[i] := $1 ~ $2[i];
+      --PERFORM array_append(s, );
+    END LOOP;
+  END LOOP;
+  RETURN s;
+END;
+$_$;
+
+
+--
+-- Name: match_weight(text, text[]); Type: FUNCTION; Schema: fias; Owner: -
+--
+
+CREATE FUNCTION match_weight(text, text[]) RETURNS smallint
+    LANGUAGE plpgsql
+    AS $_$
+--select fias.match_weight('фокиэ пермэ'::text, '{фоки1,пер,3}'::text[]);
+DECLARE
+  --s boolean[] := array[]::boolean[];
+  s int2 := 0;
+  x text;
+BEGIN
+  --FOR i IN 1..array_upper($2, 1) LOOP
+  FOREACH x IN ARRAY $2 LOOP
+    IF lower($1) ~ lower(x) THEN
+      --RAISE NOTICE '% ~ %', $1, x;
+      --RETURN true;
+      s := s + 1;
+    END IF;
+    --s[i] := $1 ~ $2[i];
+    --PERFORM array_append(s, );
+  END LOOP;
+  RETURN s;
+END;
+$_$;
+
+
+--
+-- Name: search_formalname(text[]); Type: FUNCTION; Schema: fias; Owner: -
+--
+
+CREATE FUNCTION search_formalname(text[]) RETURNS TABLE(weight smallint, "AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" smallint[], "FORMALNAME" text[], "SHORTNAME" character varying[], id integer[], _weight smallint)
+    LANGUAGE plpgsql
+    AS $_$
+DECLARE
+  len int := array_length($1, 1);
+  a text := $1[1];
+  b text := $1[len];
+  aa text[];
+  bb text[];
+  best_match text;
+  best_shortname text[] := array['ул', 'ул.', 'пл', 'пер', 'пр-кт', 'проезд', 'б-р'];
+BEGIN
+
+IF len > 1 THEN
+  aa := $1[2:len];-- со второго до последнего 
+  best_match := array_to_string(aa, '.*');
+  bb := $1[1:len-1]; -- с первого до предпоследнего
+  
+  RETURN QUERY
+  select --fias.match_weight(u."FORMALNAME"[1:4], aa) + fias.match_weight(u."FORMALNAME"[1:4], bb),
+    ((s."SHORTNAME"[1] = any(best_shortname))::int+1)::int2
+    + (((lower(array_to_string(s."FORMALNAME", ' ')) ~ best_match)::int + 1)*100)::int2
+    + s._weight as weight,
+    *
+  from (
+    select
+      *,
+      fias.match_weight(s."FORMALNAME"[2:5], aa) as _weight
+    from fias.search_formalname(a) s
+    --where  fias.match_weight(s."FORMALNAME"[2:5], aa) > 0
+    
+    --union обратный порядок массива образцов (что-то долго два запроса)
+    
+    --select *
+    --from fias.search_formalname(b) s
+    --where  fias.match_weight(s."FORMALNAME"[1:4], bb) > 0
+  ) s
+  where  s._weight > 0
+  ;
+ELSE
+  RETURN QUERY
+  select null::int2, *, null::int2
+  from fias.search_formalname(a) s;
+END IF;
+
+END;
+
+$_$;
+
+
+--
+-- Name: search_formalname(text); Type: FUNCTION; Schema: fias; Owner: -
+--
+
+CREATE FUNCTION search_formalname(text) RETURNS TABLE("AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" smallint[], "FORMALNAME" text[], "SHORTNAME" character varying[], id integer[])
+    LANGUAGE sql
+    AS $_$
+--explain
+select
+--distinct
+  Array["l7AOGUID", "l6AOGUID", "l5AOGUID", "l4AOGUID", "l3AOGUID"],
+  array["l7PARENTGUID", "l6PARENTGUID", "l5PARENTGUID", "l4PARENTGUID", "l3PARENTGUID"],
+  array["l7AOLEVEL", "l6AOLEVEL", "l5AOLEVEL", "l4AOLEVEL", "l3AOLEVEL"],
+  Array["l7FORMALNAME", "l6FORMALNAME", "l5FORMALNAME", "l4FORMALNAME", "l3FORMALNAME"],
+  Array["l7SHORTNAME", "l6SHORTNAME", "l5SHORTNAME", "l4SHORTNAME", "l3SHORTNAME"],
+  --Array["l7CENTSTATUS", "l6CENTSTATUS", "l5CENTSTATUS", "l4CENTSTATUS", "l3CENTSTATUS"],
+  array[l7id, l6id, l5id, l4id, l3id]
+  
+from (
+SELECT 
+  l3.id as l3id,
+  l3."FORMALNAME" AS "l3FORMALNAME",
+  l3."SHORTNAME" AS "l3SHORTNAME",
+  l3."AOLEVEL" AS "l3AOLEVEL",
+  --l3."CENTSTATUS" AS "l3CENTSTATUS",
+  --l3."AOID" AS "l3AOID",
+  l3."AOGUID" AS "l3AOGUID",
+  l3."PARENTGUID" AS "l3PARENTGUID",
+  
+  l4.*
+FROM (SELECT
+  l4.id AS l4id,
+  l4."FORMALNAME" AS "l4FORMALNAME",
+  -- l4.OFFNAME as l4OFFNAME,
+  l4."SHORTNAME" AS "l4SHORTNAME",
+  l4."AOGUID" AS "l4AOGUID",
+  l4."PARENTGUID" AS "l4PARENTGUID",
+  l4."AOLEVEL" AS "l4AOLEVEL",
+  --l4."CENTSTATUS" AS "l4CENTSTATUS",
+  --l4."AOID" AS "l4AOID",
+  --fias.match_weight(l4."FORMALNAME", $1) as "l4PARENT_MATCH",
+  -- 
+  
+  l5.*
+FROM (SELECT
+  l5.id AS l5id,
+  l5."FORMALNAME" AS "l5FORMALNAME",
+  -- l5.OFFNAME as l5OFFNAME,
+  l5."SHORTNAME" AS "l5SHORTNAME",
+  l5."AOGUID" AS "l5AOGUID",
+  l5."PARENTGUID" AS "l5PARENTGUID",
+  l5."AOLEVEL" AS "l5AOLEVEL",
+  --l5."CENTSTATUS" AS "l5CENTSTATUS",
+  --l5."AOID" AS "l5AOID",
+  --fias.match_weight(l5."FORMALNAME", $1) as "l5PARENT_MATCH",
+  
+  l6.*
+FROM (SELECT
+  l6.id AS l6id,
+  l6."FORMALNAME" AS "l6FORMALNAME",
+  -- l6.OFFNAME as l6OFFNAME,
+  l6."SHORTNAME" AS "l6SHORTNAME",
+  l6."AOGUID" AS "l6AOGUID",
+  l6."PARENTGUID" AS "l6PARENTGUID",
+  l6."AOLEVEL" AS "l6AOLEVEL",
+  --l6."CENTSTATUS" AS "l6CENTSTATUS",
+  --l6."AOID" AS "l6AOID",
+  --fias.match_weight(l6."FORMALNAME", $1) as "l6PARENT_MATCH",
+  
+  l7.*
+FROM (SELECT
+  id AS l7id,
+  "FORMALNAME" AS "l7FORMALNAME",
+  "SHORTNAME" AS "l7SHORTNAME",
+  "AOGUID" AS "l7AOGUID",
+  "PARENTGUID" AS "l7PARENTGUID",
+  "AOLEVEL" AS "l7AOLEVEL"
+  --"CENTSTATUS" AS "l7CENTSTATUS",
+  --"AOID" AS "l7AOID"
+        FROM
+          fias."AddressObjects"
+        WHERE 
+        lower("FORMALNAME") ~ lower($1)-- or lower("FORMALNAME") ~ lower($2) --[1] or (array_length($1, 1) > 1 and lower("FORMALNAME") ~ $1[array_length($1, 1)])
+        --and "ACTSTATUS" = 1
+) l7
+LEFT JOIN fias."AddressObjects" l6 	ON
+          --l6."ACTSTATUS" = 1 AND 
+          l7."l7PARENTGUID" = l6."AOGUID" --AND l6.id<>l7.l7id -- AND (a.AOGUID<>@ParentGUID)
+) l6
+LEFT JOIN fias."AddressObjects" l5 	ON
+          --l5."ACTSTATUS" = 1 AND
+          l6."l6PARENTGUID" = l5."AOGUID" --AND l5.id<>l6.l6id 
+) l5
+LEFT JOIN fias."AddressObjects" l4 	ON
+          --l4."ACTSTATUS" = 1 AND 
+          l5."l5PARENTGUID" = l4."AOGUID" --AND l4.id<>l5.l5id
+) l4
+LEFT JOIN fias."AddressObjects" l3 	ON
+          --l3."ACTSTATUS" = 1 AND 
+          l4."l4PARENTGUID" = l3."AOGUID" --AND l3.id<>l4.l4id --  AND l3.REGIONCODE = regcode 
+) a;
+$_$;
+
+
+--
+-- Name: search_formalname(text, text); Type: FUNCTION; Schema: fias; Owner: -
+--
+
+CREATE FUNCTION search_formalname(text, text) RETURNS TABLE("AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" smallint[], "FORMALNAME" text[], "SHORTNAME" character varying[], id integer[])
+    LANGUAGE sql
+    AS $_$
+--explain
+select
+--distinct
+  Array["l3AOGUID", "l4AOGUID", "l5AOGUID", "l6AOGUID", "l7AOGUID"],
+  array["l3PARENTGUID", "l4PARENTGUID", "l5PARENTGUID", "l6PARENTGUID", "l7PARENTGUID"],
+  array["l3AOLEVEL", "l4AOLEVEL", "l5AOLEVEL", "l6AOLEVEL", "l7AOLEVEL"],
+  Array["l3FORMALNAME", "l4FORMALNAME", "l5FORMALNAME", "l6FORMALNAME", "l7FORMALNAME"],
+  Array["l3SHORTNAME", "l4SHORTNAME", "l5SHORTNAME", "l6SHORTNAME", "l7SHORTNAME"],
+  --Array["l3CENTSTATUS", "l4CENTSTATUS", "l5CENTSTATUS", "l6CENTSTATUS", "l7CENTSTATUS"],
+  array[l3id, l4id, l5id, l6id, l7id]
+  
+from (
+SELECT 
+  l3.id as l3id,
+  l3."FORMALNAME" AS "l3FORMALNAME",
+  l3."SHORTNAME" AS "l3SHORTNAME",
+  l3."AOLEVEL" AS "l3AOLEVEL",
+  --l3."CENTSTATUS" AS "l3CENTSTATUS",
+  --l3."AOID" AS "l3AOID",
+  l3."AOGUID" AS "l3AOGUID",
+  l3."PARENTGUID" AS "l3PARENTGUID",
+  
+  l4.*
+FROM (SELECT
+  l4.id AS l4id,
+  l4."FORMALNAME" AS "l4FORMALNAME",
+  -- l4.OFFNAME as l4OFFNAME,
+  l4."SHORTNAME" AS "l4SHORTNAME",
+  l4."AOGUID" AS "l4AOGUID",
+  l4."PARENTGUID" AS "l4PARENTGUID",
+  l4."AOLEVEL" AS "l4AOLEVEL",
+  --l4."CENTSTATUS" AS "l4CENTSTATUS",
+  --l4."AOID" AS "l4AOID",
+  --fias.match_weight(l4."FORMALNAME", $1) as "l4PARENT_MATCH",
+  -- 
+  
+  l5.*
+FROM (SELECT
+  l5.id AS l5id,
+  l5."FORMALNAME" AS "l5FORMALNAME",
+  -- l5.OFFNAME as l5OFFNAME,
+  l5."SHORTNAME" AS "l5SHORTNAME",
+  l5."AOGUID" AS "l5AOGUID",
+  l5."PARENTGUID" AS "l5PARENTGUID",
+  l5."AOLEVEL" AS "l5AOLEVEL",
+  --l5."CENTSTATUS" AS "l5CENTSTATUS",
+  --l5."AOID" AS "l5AOID",
+  --fias.match_weight(l5."FORMALNAME", $1) as "l5PARENT_MATCH",
+  
+  l6.*
+FROM (SELECT
+  l6.id AS l6id,
+  l6."FORMALNAME" AS "l6FORMALNAME",
+  -- l6.OFFNAME as l6OFFNAME,
+  l6."SHORTNAME" AS "l6SHORTNAME",
+  l6."AOGUID" AS "l6AOGUID",
+  l6."PARENTGUID" AS "l6PARENTGUID",
+  l6."AOLEVEL" AS "l6AOLEVEL",
+  --l6."CENTSTATUS" AS "l6CENTSTATUS",
+  --l6."AOID" AS "l6AOID",
+  --fias.match_weight(l6."FORMALNAME", $1) as "l6PARENT_MATCH",
+  
+  l7.*
+FROM (SELECT
+  id AS l7id,
+  "FORMALNAME" AS "l7FORMALNAME",
+  "SHORTNAME" AS "l7SHORTNAME",
+  "AOGUID" AS "l7AOGUID",
+  "PARENTGUID" AS "l7PARENTGUID",
+  "AOLEVEL" AS "l7AOLEVEL"
+  --"CENTSTATUS" AS "l7CENTSTATUS",
+  --"AOID" AS "l7AOID"
+        FROM
+          fias."AddressObjects"
+        WHERE 
+        lower("FORMALNAME") ~ lower($1) or lower("FORMALNAME") ~ lower($2) --[1] or (array_length($1, 1) > 1 and lower("FORMALNAME") ~ $1[array_length($1, 1)])
+        --and "ACTSTATUS" = 1
+) l7
+LEFT JOIN fias."AddressObjects" l6 	ON
+          --l6."ACTSTATUS" = 1 AND 
+          l7."l7PARENTGUID" = l6."AOGUID" --AND l6.id<>l7.l7id -- AND (a.AOGUID<>@ParentGUID)
+) l6
+LEFT JOIN fias."AddressObjects" l5 	ON
+          --l5."ACTSTATUS" = 1 AND
+          l6."l6PARENTGUID" = l5."AOGUID" --AND l5.id<>l6.l6id 
+) l5
+LEFT JOIN fias."AddressObjects" l4 	ON
+          --l4."ACTSTATUS" = 1 AND 
+          l5."l5PARENTGUID" = l4."AOGUID" --AND l4.id<>l5.l5id
+) l4
+LEFT JOIN fias."AddressObjects" l3 	ON
+          --l3."ACTSTATUS" = 1 AND 
+          l4."l4PARENTGUID" = l3."AOGUID" --AND l3.id<>l4.l4id --  AND l3.REGIONCODE = regcode 
+) a;
+$_$;
+
+
+--
+-- Name: AddressObjects1; Type: TABLE; Schema: fias; Owner: -
+--
+
+CREATE TABLE "AddressObjects1" (
+    id integer NOT NULL,
+    "AOGUID" uuid NOT NULL,
+    "FORMALNAME" text NOT NULL,
+    "REGIONCODE" character(2) NOT NULL,
+    "AUTOCODE" character(1) NOT NULL,
+    "AREACODE" character(3) NOT NULL,
+    "CITYCODE" character(3) NOT NULL,
+    "CTARCODE" character(3) NOT NULL,
+    "PLACECODE" character(3) NOT NULL,
+    "STREETCODE" character(4),
+    "EXTRCODE" character(4) NOT NULL,
+    "SEXTCODE" character(3) NOT NULL,
+    "OFFNAME" text,
+    "POSTALCODE" character(6),
+    "IFNSFL" character(4),
+    "TERRIFNSFL" character(4),
+    "IFNSUL" character(4),
+    "TERRIFNSUL" character(4),
+    "OKATO" character varying(11),
+    "OKTMO" character varying(11),
+    "UPDATEDATE" date NOT NULL,
+    "SHORTNAME" character varying(10) NOT NULL,
+    "AOLEVEL" smallint NOT NULL,
+    "PARENTGUID" uuid,
+    "AOID" uuid NOT NULL,
+    "PREVID" uuid,
+    "NEXTID" uuid,
+    "CODE" character varying(17),
+    "PLAINCODE" character varying(15),
+    "ACTSTATUS" smallint NOT NULL,
+    "CENTSTATUS" smallint NOT NULL,
+    "OPERSTATUS" smallint NOT NULL,
+    "CURRSTATUS" smallint NOT NULL,
+    "STARTDATE" date NOT NULL,
+    "ENDDATE" date NOT NULL,
+    "NORMDOC" uuid,
+    "LIVESTATUS" boolean NOT NULL,
+    "CADNUM" character varying(120),
+    "DIVTYPE" smallint
+);
+
+
+--
+-- Name: search_formalname_parents(text); Type: FUNCTION; Schema: fias; Owner: -
+--
+
+CREATE FUNCTION search_formalname_parents(text) RETURNS SETOF "AddressObjects1"
+    LANGUAGE sql
+    AS $_$
+-- вывести полный адрес
+WITH RECURSIVE child_to_parents AS (
+  SELECT a.*
+  FROM fias."AddressObjects" a
+  WHERE lower(a."FORMALNAME") ~ $1--'51f21baa-c804-4737-9d5f-9da7a3bb1598'
+UNION ALL
+  SELECT a.*
+  FROM fias."AddressObjects" a, child_to_parents c
+  WHERE a."AOGUID" = c."PARENTGUID"
+        --AND a."CURRSTATUS" = 0
+        AND a."ACTSTATUS" = 1
+)
+SELECT * FROM child_to_parents ORDER BY "AOLEVEL";
+$_$;
+
+
+--
+-- Name: AddressObjects_id_seq; Type: SEQUENCE; Schema: fias; Owner: -
+--
+
+CREATE SEQUENCE "AddressObjects_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: AddressObjects_id_seq; Type: SEQUENCE OWNED BY; Schema: fias; Owner: -
+--
+
+ALTER SEQUENCE "AddressObjects_id_seq" OWNED BY "AddressObjects1".id;
+
+
+--
+-- Name: AddressObjects_id_seq1; Type: SEQUENCE; Schema: fias; Owner: -
+--
+
+CREATE SEQUENCE "AddressObjects_id_seq1"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: AddressObjects_id_seq1; Type: SEQUENCE OWNED BY; Schema: fias; Owner: -
+--
+
+ALTER SEQUENCE "AddressObjects_id_seq1" OWNED BY "AddressObjects".id;
+
+
+--
+-- Name: config; Type: TABLE; Schema: fias; Owner: -
+--
+
+CREATE TABLE config (
+    key text NOT NULL,
+    value text NOT NULL
+);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: fias; Owner: -
+--
+
+ALTER TABLE ONLY "AddressObjects" ALTER COLUMN id SET DEFAULT nextval('"AddressObjects_id_seq1"'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: fias; Owner: -
+--
+
+ALTER TABLE ONLY "AddressObjects1" ALTER COLUMN id SET DEFAULT nextval('"AddressObjects_id_seq"'::regclass);
+
+
+--
+-- Name: AddressObjects_pkey; Type: CONSTRAINT; Schema: fias; Owner: -
+--
+
+ALTER TABLE ONLY "AddressObjects"
+    ADD CONSTRAINT "AddressObjects_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: addressobjects_pkey; Type: CONSTRAINT; Schema: fias; Owner: -
+--
+
+ALTER TABLE ONLY "AddressObjects1"
+    ADD CONSTRAINT addressobjects_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: config_key_key; Type: CONSTRAINT; Schema: fias; Owner: -
+--
+
+ALTER TABLE ONLY config
+    ADD CONSTRAINT config_key_key UNIQUE (key);
+
+
+--
+-- Name: AddressObjects2_AOGUID_idx; Type: INDEX; Schema: fias; Owner: -
+--
+
+CREATE UNIQUE INDEX "AddressObjects2_AOGUID_idx" ON "AddressObjects" USING btree ("AOGUID");
+
+
+--
+-- Name: AddressObjects2_PARENTGUID_idx; Type: INDEX; Schema: fias; Owner: -
+--
+
+CREATE INDEX "AddressObjects2_PARENTGUID_idx" ON "AddressObjects" USING btree ("PARENTGUID");
+
+
+--
+-- Name: AddressObjects_AOGUID_idx; Type: INDEX; Schema: fias; Owner: -
+--
+
+CREATE INDEX "AddressObjects_AOGUID_idx" ON "AddressObjects1" USING btree ("AOGUID");
+
+
+--
+-- Name: AddressObjects_AOID_idx; Type: INDEX; Schema: fias; Owner: -
+--
+
+CREATE UNIQUE INDEX "AddressObjects_AOID_idx" ON "AddressObjects1" USING btree ("AOID");
+
+
+--
+-- Name: AddressObjects_PARENTGUID_idx; Type: INDEX; Schema: fias; Owner: -
+--
+
+CREATE INDEX "AddressObjects_PARENTGUID_idx" ON "AddressObjects1" USING btree ("PARENTGUID");
+
+
+--
+-- Name: AddressObjects_lower_idx; Type: INDEX; Schema: fias; Owner: -
+--
+
+CREATE INDEX "AddressObjects_lower_idx" ON "AddressObjects1" USING gin (lower("FORMALNAME") public.gin_trgm_ops);
+
+
+--
+-- Name: AddressObjects_lower_idx1; Type: INDEX; Schema: fias; Owner: -
+--
+
+CREATE INDEX "AddressObjects_lower_idx1" ON "AddressObjects" USING gin (lower("FORMALNAME") public.gin_trgm_ops);
+
+
+--
+-- Name: addressobjects_parentguid_fkey; Type: FK CONSTRAINT; Schema: fias; Owner: -
+--
+
+ALTER TABLE ONLY "AddressObjects"
+    ADD CONSTRAINT addressobjects_parentguid_fkey FOREIGN KEY ("PARENTGUID") REFERENCES "AddressObjects"("AOGUID");
+
+
+--
+-- PostgreSQL database dump complete
+--
+
