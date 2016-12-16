@@ -45,8 +45,9 @@ sub _insert {
   
   my $cb = ref $_[-1] eq 'CODE' ? pop : undef;
   
+  my $type = $self->_table_type_cols($schema, $table);
   my $data = ref $_[0] ? shift : {@_};
-  my @cols = sort keys %$data;
+  my @cols = sort grep $type->{$_}, keys %$data;
   my @bind = @$data{@cols}; #map $data->{$_}, @cols;
   push @bind, $cb
     if $cb;
@@ -99,12 +100,13 @@ https://github.com/mche/postgresql-help/blob/master/README.pod#%D0%A4%D1%83%D0%B
   
   my $cb = ref $_[-1] eq 'CODE' ? pop : undef;
   
+  my $type = $self->_table_type_cols($schema, $table);
   my $data = ref $_[0] ? shift : {@_};
-  my @cols = sort keys %$data;
+  my @cols = sort grep $type->{$_}, keys %$data;
   my @bind = @$data{@cols}; #map $data->{$_}, @cols;
   push @bind, $cb
     if $cb;
-   my $type = $self->_table_type_cols($schema, $table);
+   
   $self->dbh->selectall_arrayref($self->_prepare(sprintf(<<END_SQL, 
 insert into "%s"."%s" (%s)
 VALUES (%s)
@@ -128,7 +130,7 @@ sub _try_insert {
     if $key_cols && @$key_cols && scalar(grep defined($data->{$_}),  @$key_cols) ne scalar(@$key_cols);
   
   my $type = $self->_table_type_cols($schema, $table);
-  my @cols = sort keys %$data;
+  my @cols = sort grep $type->{$_}, keys %$data;
   my @bind = @$data{@cols}; #map $data->{$_}, @cols;
 
   $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
@@ -177,7 +179,8 @@ sub _update {
   my ($self, $schema, $table, $key_cols,) = map shift, 1..4;
   my $data = ref $_[0] ? shift : {@_};
   
-  my @cols = sort keys %$data;
+  my $type = $self->_table_type_cols($schema, $table);
+  my @cols = sort grep $type->{$_}, keys %$data;
   my @bind = (@$data{@cols}, @$data{@$key_cols});
   
   $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
@@ -202,7 +205,7 @@ sub _update_distinct {# обновить только обновляемые к�
   my $data = ref $_[0] ? shift : {@_};
   
   my $type = $self->_table_type_cols($schema, $table);
-  my @cols = sort keys %$data;
+  my @cols = sort grep $type->{$_}, keys %$data;
   my @upd_cols = grep {!($_ ~~ $key_cols)} @cols; # без ключевых колонок
   my @bind = @$data{@cols};#
   

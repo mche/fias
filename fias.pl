@@ -185,7 +185,7 @@ my $url = $opt{complete} ? $fiascompletexmlurl : $fiasdeltaxmlurl;
 die "Не смог url обновления (SOAP запрос)" unless $url;
 
 #~ say Dumper($config); exit;
-say "Загружается [$url] >>> 'fias_xml.rar'...\n"
+say "Загружается версия $version->{SHORTNAME} $version->{FORMALNAME} [$url] >>> 'fias_xml.rar'...\n"
   if $opt{debug};
 
 #~ my $get = $ua->get_with_progress($url, ':content_file'=>'fias_xml.rar',);
@@ -240,10 +240,12 @@ sub insert_or_replace {
   #~ return $model->_insert($opt{schema}, $opt{table}, undef, $r)
     #~ if $opt{complete};
 
-  
+  eval {
   $model->_try_insert($opt{schema}, $opt{table}, ['AOGUID'], $r)
     || $model->_update_distinct($opt{schema}, $opt{table}, ['AOGUID'], $r)
   ;
+  };
+  warn $@ if $@;
   
   
 }
