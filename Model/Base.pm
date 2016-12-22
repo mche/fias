@@ -8,7 +8,8 @@ sub вставить_или_обновить {
 Для одной записи таблицы
 $schema, $table,
 $key_cols - arrayref имен ключевых колонок
-$data - hashref колонки=>значение
+$data - hashref (или список) колонки=>значение
+$expr hashref опционально выражения для колонок: "колонкаА"=>"to_timestamp(?::numeric)"
 
 =cut
 
@@ -47,6 +48,8 @@ sub _insert {
   
   my $type = $self->_table_type_cols($schema, $table);
   my $data = ref $_[0] ? shift : {@_};
+  my $expr =  ref $_[0] ? shift : {};
+  
   my @cols = sort grep $type->{$_}, keys %$data;
   my @bind = @$data{@cols}; #map $data->{$_}, @cols;
   push @bind, $cb
@@ -59,10 +62,178 @@ END_SQL
   (
     $schema, $table,
     join(',', map qq|"$_"|, @cols),
-    join(',', map qq|?|, @cols), # values
+    join(',', map $expr->{$_} || qq|?|, @cols), # values
   ))), undef, @bind,);
 }
 
+sub _try_insert {
+=pod
+входные параметры смотри sub вставить_или_обновить
+=cut
+  my ($self, $schema, $table, $key_cols,) = map shift, 1..4;
+  my $data = ref $_[0] ? shift : {@_};
+  my $expr =  ref $_[0] ? shift : {};
+  
+  return $self->_insert($schema, $table, $key_cols, $data) # простая вставка для пропусков ключевых колонок
+    if $key_cols && @$key_cols && scalar(grep defined($data->{$_}),  @$key_cols) ne scalar(@$key_cols);
+  
+  my $type = $self->_table_type_cols($schema, $table);
+  my @cols = sort grep $type->{$_}, keys %$data;
+  my @bind = @$data{@cols}; #map $data->{$_}, @cols;
+
+  $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
+insert into "%s"."%s" (%s)
+( select v.* 
+from (VALUES (%s)) v (%s)
+  left join "%s"."%s" t on %s
+where t."%s" is null
+)
+returning *;
+END_SQL
+  (
+    $schema, $table,
+    join(',', map qq|"$_"|, @cols),
+    join(',', map $expr->{$_} || sprintf(qq|?::%s|,  $type->{$_}{data_type} eq 'ARRAY' ? $type->{$_}{array_type}.'[]' : $type->{$_}{data_type}), @cols), # values
+    join(',', map qq|"$_"|, @cols), # values colnames
+    $schema, $table,
+    join(' and ', map qq|v."$_"=t."$_"|, @$key_cols), # on left join
+    $key_cols->[0], # where one key column достаточно одной ключевой колонки
+  ))), undef, @bind);
+}
+
+sub _table_type_cols {# типы колонок таблицы
+  my ($self, $schema, $table) = @_;
+  $schema ||= $self->{template_vars}{schema}
+    or die "Не указана схема БД";
+  $table ||= $self->{template_vars}{tables}{main}
+    or die "Не указана таблица";
+  $self->dbh->selectall_hashref($self->_prepare(<<END_SQL, 1), 'column_name', undef, ($schema, $table))
+select column_name, data_type, regexp_replace(udt_name, '^_', '') as array_type
+from information_schema.columns
+where
+  table_catalog=current_database()
+  and table_schema=?
+  and table_name=?
+;
+END_SQL
+    or die "Не найдены колонки таблицы [$schema.$table]";
+  
+}
+
+sub _update {
+=pod
+входные параметры смотри sub вставить_или_обновить
+=cut
+  my ($self, $schema, $table, $key_cols,) = map shift, 1..4;
+  my $data = ref $_[0] ? shift : {@_};
+  my $expr =  ref $_[0] ? shift : {};
+  
+  my $type = $self->_table_type_cols($schema, $table);
+  my @cols = sort grep $type->{$_}, keys %$data;
+  my @bind = (@$data{@cols}, @$data{@$key_cols});
+  
+  $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
+update "%s"."%s" t
+set %s
+where %s
+returning *;
+END_SQL
+  (
+    $schema, $table,
+    join(', ', map sprintf(qq|"$_"=%s|, $expr->{$_} || sprintf(qq|?::%s|,  $type->{$_}{data_type} eq 'ARRAY' ? $type->{$_}{array_type}.'[]' : $type->{$_}{data_type})), @cols), # set
+    join(' and ', map qq|"$_"=?|, @$key_cols), # where
+    
+  ))), undef, @bind);
+}
+
+sub _update_distinct {# обновить только обновляемые колонки, поэтому может вернуть пусто
+=pod
+входные параметры смотри sub вставить_или_обновить
+=cut
+  my ($self, $schema, $table, $key_cols,) = map shift, 1..4;
+  my $data = ref $_[0] ? shift : {@_};
+  my $expr =  ref $_[0] ? shift : {};
+  
+  my $type = $self->_table_type_cols($schema, $table);
+  my @cols = sort grep $type->{$_}, keys %$data;
+  my @upd_cols = grep {!($_ ~~ $key_cols)} @cols; # без ключевых колонок
+  my @bind = @$data{@cols};#
+  
+  $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
+update "%s"."%s" t
+set 
+  (%s) = -- список колонок без ключевых (  col1,   col2,   col3)
+   (%s) -- (v.col1, v.col2, v.col3)
+from (VALUES (%s)) v (%s) -- аналогично _try_insert
+where
+  %s --  t.id = v.id
+  and (%s) IS DISTINCT FROM -- (t.col1, t.col2, t.col3)
+     (%s) -- (v.col1, v.col2, v.col3)
+returning *;
+END_SQL
+  (
+    $schema, $table,
+    #~ join(', ', map qq|"$_"=?|, @cols),
+    join(', ', map qq|"$_"|, @upd_cols), # set
+    join(', ', map qq|v."$_"|, @upd_cols), # set
+    
+    join(',', map $expr->{$_} || sprintf(qq|?::%s|,  $type->{$_}{data_type} eq 'ARRAY' ? $type->{$_}{array_type}.'[]' : $type->{$_}{data_type}), @cols), # values
+    #~ join(',', map qq|?::@{[$type->{$_}{data_type} eq 'ARRAY' ? $type->{$_}{array_type}.'[]' : $type->{$_}{data_type} ]}|, @cols), # values
+    join(',', map qq|"$_"|, @cols), # values
+    
+    join(' and ', map qq|t."$_"=v."$_"|, @$key_cols), # where
+    join(', ', map qq|t."$_"|, @upd_cols), # DISTINCT
+    join(', ', map qq|v."$_"|, @upd_cols), # DISTINCT
+    
+  ))), undef, @bind);
+}
+
+sub _select {
+=pod
+входные параметры смотри sub вставить_или_обновить
+=cut
+  my ($self, $schema, $table, $key_cols,) = map shift, 1..4;
+  my $data = ref $_[0] ? shift : {@_};
+  
+  my @bind = @$data{@$key_cols};
+  
+  $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
+select *
+from "%s"."%s"
+where %s;
+END_SQL
+  ($schema, $table,
+  join(' and ', map qq|"$_"=?|, @$key_cols),
+  ))),
+  undef, (@bind));
+}
+
+sub _prepare {# sth
+  my ($self, $sql, $cached) = @_;
+  $cached //= $self->sth_cached;
+  return $self->dbh->prepare_cached($sql)
+    if $cached;
+  return  $self->dbh->prepare($sql)
+  
+}
+
+sub sequence_next_val {
+  my ($self, $seq) = @_;
+  my $sth = $self->_prepare(<<END_SQL);
+SELECT nextval('   $seq   ');
+END_SQL
+  return $self->dbh->selectrow_array($sth);
+}
+
+
+sub связь {
+  my ($self, $id1, $id2) = @_;
+  $self->вставить_или_обновить($self->{template_vars}{schema}, $self->{template_vars}{tables}{refs}, ["id1", "id2"], {id1=>$id1, id2=>$id2,});
+}
+
+1;
+
+__END__
 sub _insert_bulk {
 =pod
 не пошло, плодит строки
@@ -119,165 +290,3 @@ END_SQL
   ))), { Slice=>{} }, @bind,);
 }
 
-sub _try_insert {
-=pod
-входные параметры смотри sub вставить_или_обновить
-=cut
-  my ($self, $schema, $table, $key_cols,) = map shift, 1..4;
-  my $data = ref $_[0] ? shift : {@_};
-  
-  return $self->_insert($schema, $table, $key_cols, $data) # простая вставка для пропусков ключевых колонок
-    if $key_cols && @$key_cols && scalar(grep defined($data->{$_}),  @$key_cols) ne scalar(@$key_cols);
-  
-  my $type = $self->_table_type_cols($schema, $table);
-  my @cols = sort grep $type->{$_}, keys %$data;
-  my @bind = @$data{@cols}; #map $data->{$_}, @cols;
-
-  $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
-insert into "%s"."%s" (%s)
-( select v.* 
-from (VALUES (%s)) v (%s)
-  left join "%s"."%s" t on %s
-where t."%s" is null
-)
-returning *;
-END_SQL
-  (
-    $schema, $table,
-    join(',', map qq|"$_"|, @cols),
-    join(',', map qq|?::@{[$type->{$_}{data_type} eq 'ARRAY' ? $type->{$_}{array_type}.'[]' : $type->{$_}{data_type} ]}|, @cols), # values
-    join(',', map qq|"$_"|, @cols), # values
-    $schema, $table,
-    join(' and ', map qq|v."$_"=t."$_"|, @$key_cols), # on left join
-    $key_cols->[0], # where one key column достаточно одной ключевой колонки
-  ))), undef, @bind);
-}
-
-sub _table_type_cols {# типы колонок таблицы
-  my ($self, $schema, $table) = @_;
-  $schema ||= $self->{template_vars}{schema}
-    or die "Не указана схема БД";
-  $table ||= $self->{template_vars}{tables}{main}
-    or die "Не указана таблица";
-  $self->dbh->selectall_hashref($self->_prepare(<<END_SQL, 1), 'column_name', undef, ($schema, $table))
-select column_name, data_type, regexp_replace(udt_name, '^_', '') as array_type
-from information_schema.columns
-where
-  table_catalog=current_database()
-  and table_schema=?
-  and table_name=?
-;
-END_SQL
-    or die "Не найдены колонки таблицы [$schema.$table]";
-  
-}
-
-sub _update {
-=pod
-входные параметры смотри sub вставить_или_обновить
-=cut
-  my ($self, $schema, $table, $key_cols,) = map shift, 1..4;
-  my $data = ref $_[0] ? shift : {@_};
-  
-  my $type = $self->_table_type_cols($schema, $table);
-  my @cols = sort grep $type->{$_}, keys %$data;
-  my @bind = (@$data{@cols}, @$data{@$key_cols});
-  
-  $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
-update "%s"."%s" t
-set %s
-where %s
-returning *;
-END_SQL
-  (
-    $schema, $table,
-    join(', ', map qq|"$_"=?|, @cols), # set
-    join(' and ', map qq|"$_"=?|, @$key_cols), # where
-    
-  ))), undef, @bind);
-}
-
-sub _update_distinct {# обновить только обновляемые колонки, поэтому может вернуть пусто
-=pod
-входные параметры смотри sub вставить_или_обновить
-=cut
-  my ($self, $schema, $table, $key_cols,) = map shift, 1..4;
-  my $data = ref $_[0] ? shift : {@_};
-  
-  my $type = $self->_table_type_cols($schema, $table);
-  my @cols = sort grep $type->{$_}, keys %$data;
-  my @upd_cols = grep {!($_ ~~ $key_cols)} @cols; # без ключевых колонок
-  my @bind = @$data{@cols};#
-  
-  $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
-update "%s"."%s" t
-set 
-  (%s) = -- список колонок без ключевых (  col1,   col2,   col3)
-   (%s) -- (v.col1, v.col2, v.col3)
-from (VALUES (%s)) v (%s) -- аналогично _try_insert
-where
-  %s --  t.id = v.id
-  and (%s) IS DISTINCT FROM -- (t.col1, t.col2, t.col3)
-     (%s) -- (v.col1, v.col2, v.col3)
-returning *;
-END_SQL
-  (
-    $schema, $table,
-    #~ join(', ', map qq|"$_"=?|, @cols),
-    join(', ', map qq|"$_"|, @upd_cols), # set
-    join(', ', map qq|v."$_"|, @upd_cols), # set
-    
-    join(',', map qq|?::@{[$type->{$_}{data_type} eq 'ARRAY' ? $type->{$_}{array_type}.'[]' : $type->{$_}{data_type} ]}|, @cols), # values
-    join(',', map qq|"$_"|, @cols), # values
-    
-    join(' and ', map qq|t."$_"=v."$_"|, @$key_cols), # where
-    join(', ', map qq|t."$_"|, @upd_cols), # DISTINCT
-    join(', ', map qq|v."$_"|, @upd_cols), # DISTINCT
-    
-  ))), undef, @bind);
-}
-
-sub _select {
-=pod
-входные параметры смотри sub вставить_или_обновить
-=cut
-  my ($self, $schema, $table, $key_cols,) = map shift, 1..4;
-  my $data = ref $_[0] ? shift : {@_};
-  
-  my @bind = @$data{@$key_cols};
-  
-  $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
-select *
-from "%s"."%s"
-where %s;
-END_SQL
-  ($schema, $table,
-  join(' and ', map qq|"$_"=?|, @$key_cols),
-  ))),
-  undef, (@bind));
-}
-
-sub _prepare {# sth
-  my ($self, $sql, $cached) = @_;
-  $cached //= $self->sth_cached;
-  return $self->dbh->prepare_cached($sql)
-    if $cached;
-  return  $self->dbh->prepare($sql)
-  
-}
-
-sub sequence_next_val {
-  my ($self, $seq) = @_;
-  my $sth = $self->_prepare(<<END_SQL);
-SELECT nextval('   $seq   ');
-END_SQL
-  return $self->dbh->selectrow_array($sth);
-}
-
-
-sub связь {
-  my ($self, $id1, $id2) = @_;
-  $self->вставить_или_обновить($self->{template_vars}{schema}, $self->{template_vars}{tables}{refs}, ["id1", "id2"], {id1=>$id1, id2=>$id2,});
-}
-
-1;

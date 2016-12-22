@@ -89,7 +89,8 @@ my $now = do {#~ my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
 my $version = $model->_select($opt{schema}, $opt{table}, ["AOGUID"], {AOGUID=>'00000000-0000-0000-0000-000000000000'})
   || {
   map(($_ => '00000000-0000-0000-0000-000000000000'), qw(AOGUID AOID)),
-  SHORTNAME=>'', # номер версии
+  #~ SHORTNAME=>'', # последний номер версии
+  #~ OFFNAME # номера версий
   #~ FORMALNAME => '', # текст версии
   #~ UPDATEDATE => , # дата обновления
   #~ STARTDATE => 
@@ -106,7 +107,7 @@ my $twig= XML::Twig->new(
     'TextVersion'=>sub {
         my( $t, $elt)= @_;
         #~ $config->{update_textversion} = $elt->text;
-        $version->{FORMALNAME} = $elt->text;
+        $version->{FORMALNAME} .= "\n".$elt->text;
         $version->{ENDDATE} = ($elt->text =~ /(\d+\.\d+\.\d+)/)[0];
         $version->{STARTDATE} ||= $version->{ENDDATE};
         $version->{UPDATEDATE} = $now;
@@ -118,6 +119,7 @@ my $twig= XML::Twig->new(
           if $version->{SHORTNAME} eq $elt->text;
         #~ $config->{update_versionid} = $elt->text;
         $version->{SHORTNAME} = $elt->text;
+        $version->{OFFNAME} .= "\n".$elt->text;
         $t->purge;
       },#say $versionid;
     'FiasDeltaXmlUrl'=>sub {
@@ -208,7 +210,7 @@ process($xmlfile);
 
 #~ $model->вставить_или_обновить($opt{schema}, $opt{config_table}, ['key'], {key=>$_, value=>$config->{$_}})
   #~ for keys %$config;# сохранить версию
-$model->вставить_или_обновить($opt{schema}, $opt{table}, ['AOGUID'], $version);# сохранить версию
+$model->вставить_или_обновить($opt{schema}, $opt{table}, ['AOGUID'], $version, );# сохранить версию
 
 system('rm -f AS_*.XML; rm -f fias_xml.rar');
 
