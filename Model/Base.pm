@@ -50,8 +50,10 @@ sub _insert {
   my $data = ref $_[0] ? shift : {@_};
   my $expr =  ref $_[0] ? shift : {};
   
-  my @cols = sort grep $type->{$_}, keys %$data;
-  my @bind = @$data{@cols}; #map $data->{$_}, @cols;
+  my %cols = ();
+  my @cols = sort grep $type->{$_}, (@cols{ keys %$data, keys %$expr }++ || keys %cols);
+  my @bind_cols = sort grep $type->{$_}, keys %$data;
+  my @bind = @$data{@bind_cols}; #map $data->{$_}, @cols;
   push @bind, $cb
     if $cb;
   $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
@@ -78,8 +80,10 @@ sub _try_insert {
     if $key_cols && @$key_cols && scalar(grep defined($data->{$_}),  @$key_cols) ne scalar(@$key_cols);
   
   my $type = $self->_table_type_cols($schema, $table);
-  my @cols = sort grep $type->{$_}, keys %$data;
-  my @bind = @$data{@cols}; #map $data->{$_}, @cols;
+  my %cols = ();
+  my @cols = sort grep $type->{$_}, (@cols{ keys %$data, keys %$expr }++ || keys %cols);
+  my @bind_cols = sort grep $type->{$_}, keys %$data;
+  my @bind = @$data{@bind_cols}; #map $data->{$_}, @cols;
 
   $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
 insert into "%s"."%s" (%s)
@@ -129,8 +133,10 @@ sub _update {
   my $expr =  ref $_[0] ? shift : {};
   
   my $type = $self->_table_type_cols($schema, $table);
-  my @cols = sort grep $type->{$_}, keys %$data;
-  my @bind = (@$data{@cols}, @$data{@$key_cols});
+  my %cols = ();
+  my @cols = sort grep $type->{$_}, (@cols{ keys %$data, keys %$expr }++ || keys %cols);
+  my @bind_cols = sort grep $type->{$_}, keys %$data;
+  my @bind = (@$data{@bind_cols}, @$data{@$key_cols});
   
   $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
 update "%s"."%s" t
@@ -155,9 +161,11 @@ sub _update_distinct {# обновить только обновляемые к�
   my $expr =  ref $_[0] ? shift : {};
   
   my $type = $self->_table_type_cols($schema, $table);
-  my @cols = sort grep $type->{$_}, keys %$data;
+  my %cols = ();
+  my @cols = sort grep $type->{$_}, (@cols{ keys %$data, keys %$expr }++ || keys %cols);
   my @upd_cols = grep {!($_ ~~ $key_cols)} @cols; # без ключевых колонок
-  my @bind = @$data{@cols};#
+  my @bind_cols = sort grep $type->{$_}, keys %$data;
+  my @bind = @$data{@bind_cols};#
   
   $self->dbh->selectrow_hashref($self->_prepare(sprintf(<<END_SQL, 
 update "%s"."%s" t
