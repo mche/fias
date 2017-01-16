@@ -114,7 +114,8 @@ my $twig= XML::Twig->new(
         $t->purge;},
     'VersionId'=>sub {
         my( $t, $elt)= @_;
-        die "Версия [@{[$elt->text]}] обновления не новая! Выход."
+        say "Версия [@{[$elt->text]}] обновления уже есть в базе\n", sprintf("Версии:\n%s\nПодробно:\n%s", $version->{OFFNAME}, $version->{FORMALNAME})
+          and exit
           #~ if $config->{update_versionid}{value} eq $elt->text;
           if $version->{SHORTNAME} eq $elt->text;
         #~ $config->{update_versionid} = $elt->text;
