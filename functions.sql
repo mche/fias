@@ -6,33 +6,6 @@ from  unnest($2) WITH ORDINALITY AS x(elem, pos);
 $$ LANGUAGE SQL;
 
 
---~CREATE or REPLACE FUNCTION fias.match_weight(text[], text[])
---~RETURNS int2 AS $$
---~-- посчитать общую сумму совпадений (вес) в матрице [тексты X образцы]
---~DECLARE
---~  --s boolean[] := array[]::boolean[];
---~  len int := array_length($1, 1);
---~  --s int2[] := ('{' || repeat('0,', len-1) || '0}')::int2[];
---~  s int2 := 0;
---~  x text;
---~BEGIN
---~  FOR i IN 1..len LOOP
---~    FOREACH x IN ARRAY $2 LOOP
---~      IF lower($1[i]) ~ lower(x) THEN
---~        --RAISE NOTICE '% ~ %', $1, x;
---~        --RETURN true;
---~        --s[i] := s[i] + 1;
---~        s := s + 1;
---~      END IF;
---~      --s[i] := $1 ~ $2[i];
---~      --PERFORM array_append(s, );
---~    END LOOP;
---~  END LOOP;
---~  RETURN s;
---~END;
---~$$ LANGUAGE plpgsql;
-
-
 CREATE OR REPLACE FUNCTION fias.search_formalname(text[])
 RETURNS  TABLE("AOGUID" uuid[], "PARENTGUID" uuid[], "AOLEVEL" int2[], "FORMALNAME" text[], "SHORTNAME" varchar(10)[],  id int[], "weight" int)--, "CENTSTATUS" int2[],
 AS $func$

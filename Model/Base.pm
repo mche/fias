@@ -236,7 +236,13 @@ END_SQL
 
 sub связь {
   my ($self, $id1, $id2) = @_;
-  $self->вставить_или_обновить($self->{template_vars}{schema}, $self->{template_vars}{tables}{refs}, ["id1", "id2"], {id1=>$id1, id2=>$id2,});
+  $self->вставить_или_обновить($self->template_vars->{schema}, $self->template_vars->{tables}{refs}, ["id1", "id2"], {id1=>$id1, id2=>$id2,});
+}
+
+sub связь_получить {
+  my ($self, $id1, $id2) = @_;
+  
+  $self->_select($self->template_vars->{schema}, $self->template_vars->{tables}{refs}, ["id1", "id2"], {id1=>$id1, id2=>$id2,});
 }
 
 1;
