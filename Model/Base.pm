@@ -8,8 +8,8 @@ sub вставить_или_обновить {
 Для одной записи таблицы
 $schema, $table,
 $key_cols - arrayref имен ключевых колонок
-$data - hashref (или список) колонки=>значение
-$expr hashref опционально выражения для колонок: "колонкаА"=>"to_timestamp(?::numeric)"
+$data - hashref (или список) "колонкаА" => <значение>
+$expr - hashref опционально выражения для колонок: "колонкаА"=>"to_timestamp(?::numeric)"
 
 =cut
 
@@ -38,6 +38,7 @@ sub получить_или_вставить {
   
 }
 
+sub вставить { shift->_insert(@_); }
 sub _insert {
 =pod
 

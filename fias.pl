@@ -52,8 +52,6 @@ my $ua = LWP::UserAgent->new;
 #~ my $ua = LWP::UserAgent::ProgressBar->new;
 $ua->agent('ELK');
 
-
-
 my %opt = (
   url => 'http://fias.nalog.ru/WebServices/Public/DownloadService.asmx',#http://fias.nalog.ru/WebServices/Public/DownloadService.asmx
   schema => 'fias',
@@ -66,6 +64,7 @@ my %opt = (
   debug=>1,
   xmlfile=>undef, # для полной закачки вручную скачать, распокавать и указать AS_ADDROBJ_20140601_f78af112-09a4-4a17-9eb2-3c40f45e402e.XML
   complete=>undef,# или флажок для полной версии
+  unrar => '/opt/bin/unrar', # путь к архиватору
   #~ nosave=>0,
   #~ sqldump=>0,
 );
@@ -196,14 +195,15 @@ my $get = $ua->get($url, ':content_file'=>'fias_xml.rar',);
 $get->is_success or die "Не смог скачать [$url]";
 
 #~ 
-my $line = (grep(/AS_ADDROBJ/, `unrar l fias_xml.rar 2>/dev/null`))[0]
-  or die "Нет архива fias_xml.rar";
+my @ls_rar = `$opt{unrar} l fias_xml.rar 2>/dev/null`;
+my $line = (grep /AS_ADDROBJ/, @ls_rar)[0]
+  or die "Нет архива fias_xml.rar или не найден архиватор $opt{unrar}";
 my $xmlfile = ($line =~ /(AS_ADDROBJ[\w\-]+\.xml)/i)[0]
   or die "Нет архивного XML файла";
 
 #~ system('rm -f AS_*.XML; unrar e fias_xml.rar');
-system("rm -f AS_*.XML; unrar e -n'$xmlfile' fias_xml.rar") == 0
-  or die "Не смог unrar e -n'$xmlfile' fias_xml.rar: $!";
+system("rm -f AS_*.XML; $opt{unrar} e -n'$xmlfile' fias_xml.rar") == 0
+  or die "Не смог $opt{unrar} e -n'$xmlfile' fias_xml.rar: $!";
 
 #~ my $xmlfile = glob 'AS_ADDROBJ*.XML';
 

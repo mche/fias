@@ -52,6 +52,9 @@
 
   0 12 * * * eval $PB; cd ~/fias/ && perl fias.pl > fias.log 2>&1
 
+В опциях скрипта или запуска нужно указать путь к программе unrar (системная переменная PATH другая когда работает крон)
+
+  perl --unrar=/opt/bin/unrar fias.pl
 
 =head2 Хранение версии
 
